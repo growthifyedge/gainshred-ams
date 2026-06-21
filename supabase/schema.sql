@@ -951,3 +951,15 @@ alter table public.admission_requests
 -- ############################################################################
 -- END PHASE 7
 -- ############################################################################
+
+
+-- ############################################################################
+-- PHASE 7b — link converted wife member to the admission request
+-- (Idempotent; also shipped standalone as supabase/upgrade_phase7b.sql)
+-- ############################################################################
+alter table public.admission_requests
+  add column if not exists converted_spouse_member_id uuid
+  references public.members(id) on delete set null;
+-- ############################################################################
+-- END PHASE 7b
+-- ############################################################################

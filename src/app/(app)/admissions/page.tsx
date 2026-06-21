@@ -4,7 +4,8 @@ import { createClient } from '@/lib/supabase/server';
 import { getProfile } from '@/lib/auth';
 import { PageHeader, StatusBadge, EmptyRow } from '@/components/ui';
 import ConvertButton from '@/components/ConvertButton';
-import { formatDate, formatDateTime } from '@/lib/utils';
+import { formatDate, formatDateTime, formatMoney } from '@/lib/utils';
+import { computePackage, type OfferCode } from '@/lib/packages';
 import { setAdmissionStatus } from './actions';
 
 export const dynamic = 'force-dynamic';
@@ -28,13 +29,23 @@ export default async function AdmissionsPage({
     .order('created_at', { ascending: false });
   if (status !== 'all') q = q.eq('status', status);
 
-  const [{ data: reqs }, { data: services }] = await Promise.all([
+  const [{ data: reqs }, { data: services }, { data: plansData }] = await Promise.all([
     q,
-    supabase.from('services').select('id, name'),
+    supabase.from('services').select('id, name, price, category'),
+    supabase.from('membership_plans').select('id, name, total_price, registration_fee, monthly_fee'),
   ]);
   const svcName: Record<string, string> = Object.fromEntries(
     (services ?? []).map((s: any) => [s.id, s.name])
   );
+  const svcMap: Record<string, any> = Object.fromEntries((services ?? []).map((s: any) => [s.id, s]));
+  const planMap: Record<string, any> = Object.fromEntries((plansData ?? []).map((p: any) => [p.id, p]));
+
+  // Compute a person's net using the SAME pricing engine as the software.
+  function personGross(planId: string | null, serviceIds: any, offer: OfferCode, age: number | null) {
+    const plan = planId ? planMap[planId] ?? null : null;
+    const svcs = (Array.isArray(serviceIds) ? serviceIds : []).map((id: string) => svcMap[id]).filter(Boolean);
+    return computePackage({ plan, services: svcs, offer, age }).gross;
+  }
 
   return (
     <div>
@@ -58,6 +69,13 @@ export default async function AdmissionsPage({
             const svc = Array.isArray(r.selected_services)
               ? r.selected_services.map((id: string) => svcName[id] ?? id)
               : [];
+            const couple = r.member_type === 'couple' && r.spouse;
+            const husbandNet = couple
+              ? personGross(r.selected_membership_plan_id, r.selected_services, 'none', r.age)
+              : 0;
+            const wifeNet = couple
+              ? personGross(r.spouse.plan_id, r.spouse.service_ids, 'wife', r.spouse.age ?? null)
+              : 0;
             return (
               <div key={r.id} className="card p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -71,12 +89,20 @@ export default async function AdmissionsPage({
                         </span>
                       )}
                     </div>
-                    {r.member_type === 'couple' && r.spouse && (
-                      <p className="mt-0.5 text-sm text-sky-700">
-                        Wife: {r.spouse.full_name}
-                        {r.spouse.phone ? ` · ${r.spouse.phone}` : ''}
-                        {r.spouse.age ? ` · Age ${r.spouse.age}` : ''} (50% offer)
-                      </p>
+                    {couple && (
+                      <div className="mt-1 text-sm text-sky-700">
+                        <p>
+                          Wife: {r.spouse.full_name}
+                          {r.spouse.phone ? ` · ${r.spouse.phone}` : ''}
+                          {r.spouse.age ? ` · Age ${r.spouse.age}` : ''} (50% offer)
+                        </p>
+                        <p className="text-xs text-neutral-500">
+                          Husband {formatMoney(husbandNet)} · Wife {formatMoney(wifeNet)} ·{' '}
+                          <span className="font-semibold text-neutral-700">
+                            Total {formatMoney(husbandNet + wifeNet)}
+                          </span>
+                        </p>
+                      </div>
                     )}
                     <p className="text-sm text-neutral-500">
                       {r.phone || '—'} · {r.email || '—'}
@@ -90,7 +116,7 @@ export default async function AdmissionsPage({
                   <div className="flex flex-col items-end gap-2">
                     {(r.status === 'pending' || r.status === 'approved') && (
                       <>
-                        <ConvertButton id={r.id} />
+                        <ConvertButton id={r.id} isCouple={couple} />
                         <div className="flex gap-2">
                           {r.status === 'pending' && (
                             <form action={setAdmissionStatus.bind(null, r.id, 'approved')}>
