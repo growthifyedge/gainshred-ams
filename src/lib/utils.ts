@@ -14,6 +14,41 @@ export function formatMoney(value: number | string | null | undefined) {
   })}`;
 }
 
+// ===========================================================================
+// Karachi time (Asia/Karachi). We store UTC instants in the DB, but ALL display
+// and "business date" logic is computed in Karachi time so it is correct no
+// matter where the server runs (Vercel runs in UTC).
+// ===========================================================================
+export const KARACHI_TZ = 'Asia/Karachi';
+
+// "Now" as a real instant. Stored via .toISOString() (UTC) — display in Karachi.
+export function getKarachiNow(): Date {
+  return new Date();
+}
+
+// Break an instant into Karachi-local parts.
+function karachiParts(d: Date) {
+  const parts: Record<string, string> = {};
+  for (const p of new Intl.DateTimeFormat('en-CA', {
+    timeZone: KARACHI_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(d)) {
+    parts[p.type] = p.value;
+  }
+  return parts; // { year, month, day, hour, minute }
+}
+
+// Business date in Karachi as YYYY-MM-DD.
+export function getKarachiDate(d: Date = new Date()): string {
+  const p = karachiParts(d);
+  return `${p.year}-${p.month}-${p.day}`;
+}
+
 export function formatDate(d?: string | null) {
   if (!d) return '—';
   const date = new Date(d);
@@ -22,6 +57,7 @@ export function formatDate(d?: string | null) {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
+    timeZone: KARACHI_TZ,
   });
 }
 
@@ -29,7 +65,11 @@ export function formatTime(d?: string | null) {
   if (!d) return '—';
   const date = new Date(d);
   if (isNaN(date.getTime())) return '—';
-  return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: KARACHI_TZ,
+  });
 }
 
 export function formatDateTime(d?: string | null) {
@@ -37,7 +77,10 @@ export function formatDateTime(d?: string | null) {
   return `${formatDate(d)} ${formatTime(d)}`;
 }
 
-// Human-friendly duration between two timestamps (e.g. "1h 23m").
+// Explicit alias requested by spec.
+export const formatKarachiDateTime = formatDateTime;
+
+// Human-friendly duration between two timestamps (e.g. "1h 23m"). Timezone-agnostic.
 export function durationLabel(start?: string | null, end?: string | null) {
   if (!start || !end) return '—';
   const ms = new Date(end).getTime() - new Date(start).getTime();
@@ -52,23 +95,28 @@ export function monthLabel(d?: string | null) {
   if (!d) return '—';
   const date = new Date(d);
   if (isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  return date.toLocaleDateString('en-GB', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: KARACHI_TZ,
+  });
 }
 
-// First day of a month as YYYY-MM-DD (defaults to current month).
+// First day of a month as YYYY-MM-DD (Karachi; defaults to current month).
 export function firstOfMonth(d: Date = new Date()) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+  const p = karachiParts(d);
+  return `${p.year}-${p.month}-01`;
 }
 
-// YYYY-MM string for <input type="month">.
+// YYYY-MM string for <input type="month"> (Karachi).
 export function monthInputValue(d: Date = new Date()) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  const p = karachiParts(d);
+  return `${p.year}-${p.month}`;
 }
 
+// YYYY-MM-DD for <input type="date"> and "today" filters (Karachi business date).
 export function todayInput(d: Date = new Date()) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-    d.getDate()
-  ).padStart(2, '0')}`;
+  return getKarachiDate(d);
 }
 
 const METHOD_LABELS: Record<string, string> = {

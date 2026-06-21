@@ -33,8 +33,26 @@ function toRow(input: ReturnType<typeof memberSchema.parse>) {
     monthly_fee: input.monthly_fee,
     due_day: input.due_day,
     status: input.status,
+    age: input.age ?? null,
+    offer_code: input.offer_code ?? 'none',
     notes: input.notes || null,
   };
+}
+
+// Replace a member's selected services with the chosen set (admin only).
+async function syncServices(supabase: any, memberId: string, serviceIds: string[]) {
+  await supabase.from('member_services').delete().eq('member_id', memberId);
+  if (!serviceIds.length) return;
+  const { data: services } = await supabase
+    .from('services')
+    .select('id, price')
+    .in('id', serviceIds);
+  const rows = (services ?? []).map((s: any) => ({
+    member_id: memberId,
+    service_id: s.id,
+    price: s.price,
+  }));
+  if (rows.length) await supabase.from('member_services').insert(rows);
 }
 
 export async function createMember(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -43,6 +61,8 @@ export async function createMember(_prev: FormState, formData: FormData): Promis
 
   const parsed = parseMember(formData);
   if (!parsed.success) return { error: firstError(parsed.error) };
+
+  const serviceIds = (formData.getAll('service_ids') as string[]).filter(Boolean);
 
   const supabase = createClient();
   const { data, error } = await supabase
@@ -53,6 +73,7 @@ export async function createMember(_prev: FormState, formData: FormData): Promis
 
   if (error) return { error: error.message };
 
+  await syncServices(supabase, data.id, serviceIds);
   await logAudit('create', 'member', data.id, { full_name: parsed.data.full_name });
   revalidatePath('/members');
   redirect('/members');
@@ -69,10 +90,13 @@ export async function updateMember(
   const parsed = parseMember(formData);
   if (!parsed.success) return { error: firstError(parsed.error) };
 
+  const serviceIds = (formData.getAll('service_ids') as string[]).filter(Boolean);
+
   const supabase = createClient();
   const { error } = await supabase.from('members').update(toRow(parsed.data)).eq('id', id);
   if (error) return { error: error.message };
 
+  await syncServices(supabase, id, serviceIds);
   await logAudit('update', 'member', id, { full_name: parsed.data.full_name });
   revalidatePath('/members');
   redirect('/members');

@@ -18,7 +18,31 @@ export default async function ReceiptPage({ params }: { params: { id: string } }
 
   if (!r) notFound();
 
+  // Membership context (available after Phase 3; gracefully skipped otherwise).
+  const [{ data: memberCtx }, { data: memberSvcs }] = await Promise.all([
+    supabase
+      .from('members')
+      .select('offer_code, age, plan:membership_plans(name, total_price, saving_amount, duration_months)')
+      .eq('id', r.member_id)
+      .single(),
+    supabase
+      .from('member_services')
+      .select('price, service:services(name)')
+      .eq('member_id', r.member_id),
+  ]);
+
   const gymName = settings?.gym_name ?? 'GainShred';
+  const planName = (memberCtx as any)?.plan?.name as string | undefined;
+  const offerCode = (memberCtx as any)?.offer_code as string | undefined;
+  const planSaving = (memberCtx as any)?.plan?.saving_amount as number | undefined;
+  const svcNames = (memberSvcs ?? []).map((x: any) => x.service?.name).filter(Boolean);
+  const OFFER_LABELS: Record<string, string> = {
+    couple: 'Couple Offer',
+    wife: 'Wife Offer (50% off training)',
+    senior: 'Senior Citizen 67+ Offer',
+  };
+  const showMembership =
+    !!planName || svcNames.length > 0 || (!!offerCode && offerCode !== 'none');
 
   return (
     <div className="min-h-screen bg-neutral-100 p-4 sm:p-8">
@@ -70,6 +94,37 @@ export default async function ReceiptPage({ params }: { params: { id: string } }
               <p className="font-semibold">{monthLabel(r.payment_month)}</p>
             </div>
           </div>
+
+          {/* Membership */}
+          {showMembership && (
+            <div className="mt-5 rounded-lg bg-neutral-50 p-3 text-sm">
+              <p className="mb-1 font-semibold">Membership</p>
+              {planName && (
+                <p className="text-neutral-600">
+                  Package: <span className="font-medium text-neutral-800">{planName}</span>
+                </p>
+              )}
+              {svcNames.length > 0 && (
+                <p className="text-neutral-600">
+                  Services: <span className="font-medium text-neutral-800">{svcNames.join(', ')}</span>
+                </p>
+              )}
+              {offerCode && offerCode !== 'none' && (
+                <p className="text-neutral-600">
+                  Offer:{' '}
+                  <span className="font-medium text-emerald-700">
+                    {OFFER_LABELS[offerCode] ?? offerCode}
+                  </span>
+                </p>
+              )}
+              {planSaving ? (
+                <p className="text-neutral-600">
+                  Package saving:{' '}
+                  <span className="font-medium text-neutral-800">{formatMoney(planSaving)}</span>
+                </p>
+              ) : null}
+            </div>
+          )}
 
           {/* Breakdown */}
           <table className="mt-6 w-full text-sm">

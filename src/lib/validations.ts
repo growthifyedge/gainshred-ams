@@ -15,6 +15,13 @@ export const memberSchema = z.object({
     .min(1, 'Due day must be 1–28')
     .max(28, 'Due day must be 1–28'),
   status: z.enum(['active', 'inactive', 'frozen']),
+  age: z
+    .preprocess(
+      (v) => (v === '' || v == null ? null : v),
+      z.coerce.number().int().min(0).max(120).nullable()
+    )
+    .optional(),
+  offer_code: z.enum(['none', 'couple', 'wife', 'senior']).default('none'),
   notes: optionalString,
 });
 export type MemberInput = z.infer<typeof memberSchema>;

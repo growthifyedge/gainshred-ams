@@ -13,11 +13,18 @@ export default async function NewMemberPage() {
   if (profile?.role !== 'admin') redirect('/members');
 
   const supabase = createClient();
-  const { data: plans } = await supabase
-    .from('membership_plans')
-    .select('id, name, monthly_fee')
-    .eq('is_active', true)
-    .order('monthly_fee');
+  const [{ data: plans }, { data: services }] = await Promise.all([
+    supabase
+      .from('membership_plans')
+      .select('id, name, monthly_fee, duration_months, advance_amount, total_price, saving_amount')
+      .eq('is_active', true)
+      .order('monthly_fee'),
+    supabase
+      .from('services')
+      .select('id, name, price, category')
+      .eq('is_active', true)
+      .order('sort_order'),
+  ]);
 
   return (
     <div>
@@ -25,7 +32,14 @@ export default async function NewMemberPage() {
       <MemberForm
         action={createMember}
         plans={plans ?? []}
-        initial={{ joining_date: todayInput(), due_day: 5, status: 'active' }}
+        services={services ?? []}
+        initial={{
+          joining_date: todayInput(),
+          due_day: 5,
+          status: 'active',
+          offer_code: 'none',
+          service_ids: [],
+        }}
         submitLabel="Create Member"
       />
     </div>
