@@ -1,11 +1,13 @@
 'use server';
 
+import { randomUUID } from 'crypto';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getProfile } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
 import { memberSchema, firstError } from '@/lib/validations';
+import { getKarachiDate } from '@/lib/utils';
 
 export type FormState = { error?: string };
 
@@ -98,6 +100,87 @@ export async function updateMember(
 
   await syncServices(supabase, id, serviceIds);
   await logAudit('update', 'member', id, { full_name: parsed.data.full_name });
+  revalidatePath('/members');
+  redirect('/members');
+}
+
+// Couple admission: create husband + wife as two linked members (admin only).
+// Husband = normal pricing; Wife = wife 50% offer. Each gets its own reg number.
+export async function createCouple(_prev: FormState, formData: FormData): Promise<FormState> {
+  const profile = await getProfile();
+  if (profile?.role !== 'admin') return { error: 'Only admins can add members.' };
+
+  const hName = String(formData.get('h_full_name') ?? '').trim();
+  const wName = String(formData.get('w_full_name') ?? '').trim();
+  if (hName.length < 2 || wName.length < 2) {
+    return { error: 'Both husband and wife full names are required.' };
+  }
+
+  const joining = String(formData.get('joining_date') ?? '') || getKarachiDate();
+  const groupId = randomUUID();
+  const supabase = createClient();
+
+  async function createOne(prefix: 'h' | 'w', offerCode: 'none' | 'wife') {
+    const planId = String(formData.get(`${prefix}_plan_id`) ?? '') || null;
+    const ageRaw = String(formData.get(`${prefix}_age`) ?? '');
+    const age = ageRaw === '' ? null : Number(ageRaw);
+
+    let monthlyFee = 0;
+    if (planId) {
+      const { data: plan } = await supabase
+        .from('membership_plans')
+        .select('monthly_fee')
+        .eq('id', planId)
+        .single();
+      monthlyFee = Number(plan?.monthly_fee ?? 0);
+    }
+    const isSenior = age != null && age >= 67;
+    if (isSenior) monthlyFee = 0; // senior = free package
+
+    const { data: member, error } = await supabase
+      .from('members')
+      .insert({
+        full_name: String(formData.get(`${prefix}_full_name`)).trim(),
+        phone: String(formData.get(`${prefix}_phone`) ?? '') || null,
+        email: String(formData.get(`${prefix}_email`) ?? '') || null,
+        age,
+        joining_date: joining,
+        plan_id: planId,
+        monthly_fee: monthlyFee,
+        offer_code: isSenior ? 'senior' : offerCode,
+        due_day: 5,
+        status: 'active',
+        couple_group_id: groupId,
+      })
+      .select('id, registration_number')
+      .single();
+    if (error) throw new Error(error.message);
+
+    const svcIds = (formData.getAll(`${prefix}_service_ids`) as string[]).filter(Boolean);
+    if (svcIds.length) {
+      const { data: svcs } = await supabase.from('services').select('id, price').in('id', svcIds);
+      const rows = (svcs ?? []).map((s: any) => ({
+        member_id: member.id,
+        service_id: s.id,
+        price: s.price,
+      }));
+      if (rows.length) await supabase.from('member_services').insert(rows);
+    }
+    return member;
+  }
+
+  try {
+    const husband = await createOne('h', 'none');
+    const wife = await createOne('w', 'wife');
+    await logAudit('create_couple', 'member', husband.id, {
+      group: groupId,
+      husband: husband.registration_number,
+      wife: wife.registration_number,
+    });
+  } catch (e: any) {
+    return { error: e?.message ?? 'Could not create couple.' };
+  }
+
   revalidatePath('/members');
   redirect('/members');
 }

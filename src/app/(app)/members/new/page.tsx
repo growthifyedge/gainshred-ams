@@ -2,8 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getProfile } from '@/lib/auth';
 import { PageHeader } from '@/components/ui';
-import MemberForm from '@/components/MemberForm';
-import { createMember } from '../actions';
+import AdmissionTypeTabs from '@/components/AdmissionTypeTabs';
 import { todayInput } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -28,20 +27,8 @@ export default async function NewMemberPage() {
 
   return (
     <div>
-      <PageHeader title="Add Member" subtitle="Create a new gym member." />
-      <MemberForm
-        action={createMember}
-        plans={plans ?? []}
-        services={services ?? []}
-        initial={{
-          joining_date: todayInput(),
-          due_day: 5,
-          status: 'active',
-          offer_code: 'none',
-          service_ids: [],
-        }}
-        submitLabel="Create Member"
-      />
+      <PageHeader title="Add Member" subtitle="Single member, or a couple (husband + wife) together." />
+      <AdmissionTypeTabs plans={plans ?? []} services={services ?? []} joiningDate={todayInput()} />
     </div>
   );
 }

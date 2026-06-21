@@ -32,10 +32,8 @@ export default function AdmissionForm({
         <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-emerald-100 text-2xl">
           ✓
         </div>
-        <h2 className="text-xl font-bold">Request received!</h2>
-        <p className="mt-2 text-sm text-neutral-500">
-          Thank you. Our team will review your admission request and contact you soon.
-        </p>
+        <h2 className="text-xl font-bold">Admission request submitted successfully.</h2>
+        <p className="mt-2 text-sm text-neutral-500">Our team will review and contact you.</p>
         <a href="/admission" className="btn-ghost mt-5 inline-block">
           Submit another request
         </a>

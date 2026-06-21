@@ -5,8 +5,8 @@ import { admissionSchema, firstError } from '@/lib/validations';
 
 export type AdmissionState = { error?: string; success?: boolean };
 
-// Public submission — runs as anon; the DB function is SECURITY DEFINER so the
-// row is inserted without the public user being able to READ the table.
+// Public submission. The anon RLS policy allows INSERT into admission_requests,
+// so we insert directly (no RPC needed). Public users still cannot READ the table.
 export async function submitAdmission(
   _prev: AdmissionState,
   formData: FormData
@@ -31,20 +31,20 @@ export async function submitAdmission(
   const serviceIds = (formData.getAll('service_ids') as string[]).filter(Boolean);
 
   const supabase = createClient();
-  const { error } = await supabase.rpc('submit_admission_request', {
-    p_full_name: input.full_name,
-    p_phone: input.phone || null,
-    p_email: input.email || null,
-    p_age: input.age ?? null,
-    p_gender: input.gender || null,
-    p_address: input.address || null,
-    p_emergency: input.emergency_contact || null,
-    p_plan: input.plan_id || null,
-    p_services: serviceIds,
-    p_offer: input.offer_code,
-    p_joining: input.preferred_joining_date || null,
-    p_notes: input.notes || null,
-    p_photo_reference: input.photo_reference || null,
+  const { error } = await supabase.from('admission_requests').insert({
+    full_name: input.full_name,
+    phone: input.phone || null,
+    email: input.email || null,
+    age: input.age ?? null,
+    gender: input.gender || null,
+    address: input.address || null,
+    emergency_contact: input.emergency_contact || null,
+    selected_membership_plan_id: input.plan_id || null,
+    selected_services: serviceIds,
+    offer_code: input.offer_code,
+    preferred_joining_date: input.preferred_joining_date || null,
+    notes: input.notes || null,
+    photo_reference: input.photo_reference || null,
   });
 
   if (error) return { error: error.message };

@@ -832,3 +832,19 @@ end $$;
 -- ############################################################################
 -- END PHASE 4
 -- ############################################################################
+
+
+-- ############################################################################
+-- PHASE 4b — offer cleanup + couple admission linking
+-- (Idempotent; also shipped standalone as supabase/upgrade_phase4b.sql)
+-- ############################################################################
+alter table public.members add column if not exists couple_group_id uuid;
+create index if not exists members_couple_group_idx on public.members(couple_group_id);
+alter table public.offers add column if not exists applies_to     text;
+alter table public.offers add column if not exists offer_category text;
+update public.offers set is_active = false where code = 'couple';
+update public.offers set is_active = true, applies_to = 'wife_services',     offer_category = 'discount' where code = 'wife';
+update public.offers set is_active = true, applies_to = 'all_except_cardio', offer_category = 'free'     where code = 'senior';
+-- ############################################################################
+-- END PHASE 4b
+-- ############################################################################
