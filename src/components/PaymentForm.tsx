@@ -52,12 +52,22 @@ export default function PaymentForm({
   const [imageUrl, setImageUrl] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
-  const [summary, setSummary] = useState<{ gross: number; discount: number; paid: number } | null>(null);
+  type Bill = {
+    registration_fee: number;
+    package_fee: number;
+    services_total: number;
+    gross_payable: number;
+    discount: number;
+    paid: number;
+    receivable: number;
+    package_name?: string | null;
+  };
+  const [summary, setSummary] = useState<Bill | null>(null);
 
   const selected = useMemo(() => members.find((m) => m.id === memberId), [members, memberId]);
   const advanceBalance = Number(selected?.advance_balance ?? 0);
 
-  // Load the member's financial summary for the chosen month and auto-fill.
+  // Load the member's FULL bill from the single source of truth (member_billing).
   useEffect(() => {
     if (!memberId) {
       setSummary(null);
@@ -67,28 +77,38 @@ export default function PaymentForm({
     (async () => {
       const supabase = createClient();
       const { data } = await supabase
-        .from('due_details')
-        .select('gross_payable, discount, amount_paid')
+        .from('member_billing')
+        .select(
+          'registration_fee, package_fee, services_total, gross_payable, discount, paid, receivable, package_name'
+        )
         .eq('member_id', memberId)
-        .eq('billing_month', `${month}-01`)
         .maybeSingle();
       if (cancelled) return;
-      const fee = Number(selected?.monthly_fee ?? 0);
-      const gross = data ? Number(data.gross_payable) : fee;
-      const discount = data ? Number(data.discount) : 0;
-      const paid = data ? Number(data.amount_paid) : 0;
-      setSummary({ gross, discount, paid });
-      const receivable = Math.max(gross - discount - paid, 0);
-      setAmount(String(receivable > 0 ? receivable : fee));
+      if (data) {
+        setSummary({
+          registration_fee: Number(data.registration_fee),
+          package_fee: Number(data.package_fee),
+          services_total: Number(data.services_total),
+          gross_payable: Number(data.gross_payable),
+          discount: Number(data.discount),
+          paid: Number(data.paid),
+          receivable: Number(data.receivable),
+          package_name: data.package_name,
+        });
+        setAmount(String(Number(data.receivable)));
+      } else {
+        setSummary(null);
+        setAmount('0');
+      }
     })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [memberId, month]);
+  }, [memberId]);
 
-  // Live accounting figures for the summary panel.
-  const gross = summary?.gross ?? Number(selected?.monthly_fee ?? 0);
+  // Live accounting figures (gross is the member's full lump-sum bill).
+  const gross = summary?.gross_payable ?? 0;
   const existingDiscount = summary?.discount ?? 0;
   const paidToDate = summary?.paid ?? 0;
   const manualDiscount =
@@ -97,11 +117,11 @@ export default function PaymentForm({
       : discountType === 'fixed'
         ? Number(discountValue || 0)
         : 0;
-  const effectiveDiscount = Math.min(
-    Math.max(discountType === 'none' ? existingDiscount : manualDiscount, 0),
+  const totalDiscount = Math.min(
+    existingDiscount + (discountType === 'none' ? 0 : Math.max(manualDiscount, 0)),
     gross
   );
-  const netPayable = Math.max(gross - effectiveDiscount, 0);
+  const netPayable = Math.max(gross - totalDiscount, 0);
   const dueBefore = Math.max(netPayable - paidToDate, 0);
   const dueAfter = Math.max(netPayable - paidToDate - Number(amount || 0), 0);
 
@@ -165,23 +185,25 @@ export default function PaymentForm({
         </div>
       </div>
 
-      {/* Financial summary (auto-filled) */}
-      {selected && (
+      {/* Financial summary (auto-filled from member_billing) */}
+      {selected && summary && (
         <div className="rounded-lg bg-neutral-50 p-4 text-sm">
           <div className="mb-2 flex items-center justify-between">
-            <span className="font-semibold">Financial summary</span>
+            <span className="font-semibold">Fee Summary{summary.package_name ? ` · ${summary.package_name}` : ''}</span>
             <span className="font-mono text-xs text-neutral-500">{selected.registration_number ?? ''}</span>
           </div>
           <dl className="grid grid-cols-2 gap-x-6 gap-y-1">
-            <Row label="Gross payable" value={formatMoney(gross)} />
-            <Row label="Discount" value={formatMoney(effectiveDiscount)} />
-            <Row label="Net payable" value={formatMoney(netPayable)} />
+            <Row label="Registration Fee" value={formatMoney(summary.registration_fee)} />
+            <Row label="Package Fee" value={formatMoney(summary.package_fee)} />
+            <Row label="Services Total" value={formatMoney(summary.services_total)} />
+            <Row label="Gross Payable" value={formatMoney(gross)} />
+            <Row label="Discount" value={formatMoney(totalDiscount)} />
+            <Row label="Net Payable" value={formatMoney(netPayable)} />
             <Row label="Paid to date" value={formatMoney(paidToDate)} />
-            <Row label="Due before this payment" value={formatMoney(dueBefore)} />
             <Row label="Advance balance" value={formatMoney(advanceBalance)} />
           </dl>
           <div className="mt-2 flex items-center justify-between border-t border-neutral-200 pt-2">
-            <span className="font-semibold">Remaining due after payment</span>
+            <span className="font-semibold">Due / receivable after this payment</span>
             <span className="text-base font-bold text-brand">{formatMoney(dueAfter)}</span>
           </div>
         </div>

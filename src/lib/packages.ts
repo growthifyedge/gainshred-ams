@@ -1,14 +1,22 @@
 // ===========================================================================
-// Membership pricing helpers (pure functions, shared by member forms, payment
-// section and receipts). All amounts in Rs.
+// SINGLE PRICING SOURCE OF TRUTH.
+// Used by: /admission, Add Member, Edit Member, Couple, Convert, Payment,
+// Dues, Receipt, Reports. The result is snapshotted onto the member at save
+// time and read everywhere via the member_billing view.
 //
-// Offer rules:
-//  - Senior (or age >= 67): registration, package and all services FREE,
-//    EXCEPT Cardio which is Rs. 2000 (only if selected).
-//  - Wife 50%: 50% off eligible training services (training / cardio / class).
-//    Package and registration are charged normally.
-//  - Couple is NOT an offer here — it is a separate two-person admission flow
-//    (husband = normal, wife = wife 50%). Kept in the type for back-compat only.
+//   Gross Payable = Registration Fee + Package Fee (lump sum) + Optional Services
+//   Net Payable   = Gross - Discounts
+//   Receivable    = Net  - Paid
+//
+// Package fee is the WHOLE-DURATION lump sum (3 Months = 9000, not 3500).
+// Registration fee comes from the selected package (Monthly 3000, 3M 2000,
+// 6M 1500, Yearly 0). "Registration"/"Monthly Fee" are NOT optional services.
+//
+// Offers:
+//  - Senior (or age >= 67): registration = 0, package = 0, all services free
+//    EXCEPT Cardio (Rs. 2000 if selected).
+//  - Wife 50%: 50% off eligible optional services only (training/cardio/class);
+//    registration & package are NOT discounted.
 // ===========================================================================
 
 export type OfferCode = 'none' | 'wife' | 'senior' | 'couple';
@@ -16,10 +24,10 @@ export type OfferCode = 'none' | 'wife' | 'senior' | 'couple';
 export type Plan = {
   id: string;
   name: string;
-  monthly_fee: number;
+  monthly_fee?: number;
   duration_months?: number | null;
-  advance_amount?: number | null;
-  total_price?: number | null;
+  total_price?: number | null;      // package fee (lump sum)
+  registration_fee?: number | null; // registration fee for this package
   saving_amount?: number | null;
 };
 
@@ -30,8 +38,10 @@ export type Service = {
   category: string; // registration | membership | training | cardio | class | other
 };
 
+// Categories that are part of the PACKAGE, never optional add-ons.
+const PACKAGE_CATEGORIES = ['registration', 'membership'];
+// Optional services eligible for the Wife 50% discount.
 const WIFE_ELIGIBLE = ['training', 'cardio', 'class'];
-const REGISTRATION_CATEGORY = 'registration';
 const CARDIO_CATEGORY = 'cardio';
 const CARDIO_SENIOR_PRICE = 2000;
 
@@ -39,13 +49,12 @@ export function isSenior(age?: number | null): boolean {
   return typeof age === 'number' && !isNaN(age) && age >= 67;
 }
 
-// 67+ always becomes senior; legacy "couple" offer collapses to "none".
 export function effectiveOffer(offer: OfferCode, age?: number | null): OfferCode {
   if (isSenior(age)) return 'senior';
   return offer === 'couple' ? 'none' : offer;
 }
 
-// Payable price for ONE service under the chosen offer.
+// Payable price for ONE optional service under the chosen offer.
 export function servicePayable(service: Service, offer: OfferCode, age?: number | null): number {
   const eff = effectiveOffer(offer, age);
   if (eff === 'senior') {
@@ -60,16 +69,13 @@ export function servicePayable(service: Service, offer: OfferCode, age?: number 
 export type PricingResult = {
   effectiveOffer: OfferCode;
   isSenior: boolean;
-  packageGross: number;
-  packagePayable: number;
-  registrationGross: number;
-  registrationPayable: number;
-  servicesGross: number;
-  servicesPayable: number;
-  gross: number;
-  discount: number;
-  net: number;
-  monthlyFee: number; // recurring monthly fee to store on the member
+  registrationFee: number; // offer-adjusted
+  packageFee: number; // offer-adjusted (lump sum)
+  servicesTotal: number; // offer-adjusted optional services
+  gross: number; // registration + package + services (offer-adjusted)
+  fullGross: number; // before offer (for "you save")
+  offerSaving: number; // fullGross - gross
+  packageSaving: number; // duration saving (informational)
   offerLabel: string;
 };
 
@@ -89,39 +95,34 @@ export function computePackage(opts: {
   const { plan, services, offer, age } = opts;
   const eff = effectiveOffer(offer, age);
 
-  const packageGross = plan?.monthly_fee ?? 0;
-  const packagePayable = eff === 'senior' ? 0 : packageGross;
+  // Only OPTIONAL services count here; package components are excluded.
+  const optional = services.filter((s) => !PACKAGE_CATEGORIES.includes(s.category));
 
-  const reg = services.filter((s) => s.category === REGISTRATION_CATEGORY);
-  const other = services.filter((s) => s.category !== REGISTRATION_CATEGORY);
+  const fullRegistration = Number(plan?.registration_fee ?? 0);
+  const fullPackage = Number(plan?.total_price ?? 0);
+  const servicesFull = optional.reduce((s, sv) => s + Number(sv.price || 0), 0);
 
-  const registrationGross = reg.reduce((s, sv) => s + Number(sv.price || 0), 0);
-  const registrationPayable = reg.reduce((s, sv) => s + servicePayable(sv, offer, age), 0);
-  const servicesGross = other.reduce((s, sv) => s + Number(sv.price || 0), 0);
-  const servicesPayable = other.reduce((s, sv) => s + servicePayable(sv, offer, age), 0);
+  const registrationFee = eff === 'senior' ? 0 : fullRegistration;
+  const packageFee = eff === 'senior' ? 0 : fullPackage;
+  const servicesTotal = optional.reduce((s, sv) => s + servicePayable(sv, offer, age), 0);
 
-  const gross = packageGross + registrationGross + servicesGross;
-  const net = packagePayable + registrationPayable + servicesPayable;
-  const discount = Math.max(gross - net, 0);
+  const gross = registrationFee + packageFee + servicesTotal;
+  const fullGross = fullRegistration + fullPackage + servicesFull;
 
   return {
     effectiveOffer: eff,
     isSenior: isSenior(age),
-    packageGross,
-    packagePayable,
-    registrationGross,
-    registrationPayable,
-    servicesGross,
-    servicesPayable,
+    registrationFee,
+    packageFee,
+    servicesTotal,
     gross,
-    discount,
-    net,
-    monthlyFee: packagePayable,
+    fullGross,
+    offerSaving: Math.max(fullGross - gross, 0),
+    packageSaving: Number(plan?.saving_amount ?? 0),
     offerLabel: OFFER_LABELS[eff] ?? '',
   };
 }
 
-// Offer dropdown — Couple intentionally excluded (it is an admission type).
 export const OFFER_OPTIONS: { value: OfferCode; label: string }[] = [
   { value: 'none', label: 'No Offer' },
   { value: 'wife', label: 'Wife 50% Offer' },

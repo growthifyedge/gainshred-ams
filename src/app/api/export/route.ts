@@ -87,22 +87,24 @@ async function paymentsRows(supabase: any, from?: string, to?: string): Promise<
 
 async function duesRows(supabase: any): Promise<Rows> {
   const { data } = await supabase
-    .from('due_details')
+    .from('member_billing')
     .select(
-      'registration_number, member_name, billing_month, gross_payable, discount, net_payable, amount_paid, balance, penalty_due, due_date, status, last_payment_date'
+      'registration_number, full_name, package_name, registration_fee, package_fee, services_total, gross_payable, discount, net_payable, paid, receivable, status, last_payment_date'
     )
-    .order('due_date', { ascending: true });
+    .gt('gross_payable', 0)
+    .order('receivable', { ascending: false });
   return (data ?? []).map((d: any) => ({
     registration_number: d.registration_number ?? '',
-    member: d.member_name,
-    month: d.billing_month,
+    member: d.full_name,
+    package: d.package_name ?? '',
+    registration_fee: d.registration_fee,
+    package_fee: d.package_fee,
+    services_total: d.services_total,
     gross_payable: d.gross_payable,
     discount: d.discount,
     net_payable: d.net_payable,
-    paid: d.amount_paid,
-    receivable: d.balance,
-    penalty_due: d.penalty_due,
-    due_date: d.due_date,
+    paid: d.paid,
+    receivable: d.receivable,
     status: d.status,
     last_payment_date: d.last_payment_date ?? '',
   }));

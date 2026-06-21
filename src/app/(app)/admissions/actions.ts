@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getProfile } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
 import { getKarachiDate } from '@/lib/utils';
+import { memberBillSnapshot } from '@/lib/billing';
 
 export type AdmissionState = { error?: string };
 
@@ -48,16 +49,14 @@ export async function convertAdmission(
     }
   }
 
-  // Monthly fee from the selected plan.
-  let monthlyFee = 0;
-  if (req.selected_membership_plan_id) {
-    const { data: plan } = await supabase
-      .from('membership_plans')
-      .select('monthly_fee')
-      .eq('id', req.selected_membership_plan_id)
-      .single();
-    monthlyFee = Number(plan?.monthly_fee ?? 0);
-  }
+  // Compute the billing snapshot with the SAME engine the forms use.
+  const serviceIds: string[] = Array.isArray(req.selected_services) ? req.selected_services : [];
+  const snap = await memberBillSnapshot(supabase, {
+    planId: req.selected_membership_plan_id,
+    serviceIds,
+    offer: req.offer_code || 'none',
+    age: req.age,
+  });
 
   // Create the member (registration_number auto-generates via DB default).
   const { data: member, error } = await supabase
@@ -69,18 +68,17 @@ export async function convertAdmission(
       age: req.age,
       joining_date: req.preferred_joining_date || getKarachiDate(),
       plan_id: req.selected_membership_plan_id,
-      monthly_fee: monthlyFee,
       offer_code: req.offer_code || 'none',
       due_day: 5,
       status: 'active',
       notes: req.notes,
+      ...snap,
     })
     .select('id, registration_number')
     .single();
   if (error) return { error: error.message };
 
   // Apply selected services.
-  const serviceIds: string[] = Array.isArray(req.selected_services) ? req.selected_services : [];
   if (serviceIds.length) {
     const { data: svcs } = await supabase.from('services').select('id, price').in('id', serviceIds);
     const rows = (svcs ?? []).map((s: any) => ({
@@ -90,9 +88,6 @@ export async function convertAdmission(
     }));
     if (rows.length) await supabase.from('member_services').insert(rows);
   }
-
-  // Open a receivable (current month's due) so it shows in Dues immediately.
-  await supabase.rpc('get_or_create_due', { p_member: member.id, p_month: getKarachiDate() });
 
   await supabase
     .from('admission_requests')

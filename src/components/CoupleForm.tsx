@@ -62,8 +62,7 @@ export default function CoupleForm({
   );
 
   const totalGross = hPricing.gross + wPricing.gross;
-  const totalDiscount = hPricing.discount + wPricing.discount;
-  const totalNet = hPricing.net + wPricing.net;
+  const totalSaving = hPricing.offerSaving + wPricing.offerSaving;
 
   return (
     <form action={formAction} className="space-y-6">
@@ -100,8 +99,8 @@ export default function CoupleForm({
         </h3>
         <dl className="space-y-1 text-sm">
           <Row label="Total Gross" value={formatMoney(totalGross)} />
-          <Row label="Total Discount" value={`− ${formatMoney(totalDiscount)}`} />
-          <Row label="Total Net Payable" value={formatMoney(totalNet)} brand />
+          <Row label="Total Net Payable" value={formatMoney(totalGross)} brand />
+          {totalSaving > 0 && <Row label="Total offer saving" value={formatMoney(totalSaving)} />}
         </dl>
         <p className="mt-2 text-xs text-neutral-400">
           Two members with two registration numbers will be created and linked. Collect payment from
@@ -237,10 +236,10 @@ function PersonCard({
 
       {/* Per-person summary */}
       <dl className="mt-4 space-y-1 border-t border-neutral-200 pt-3 text-sm">
-        <Row label="Package Fee" value={pricing.effectiveOffer === 'senior' ? 'FREE' : formatMoney(pricing.packageGross)} />
-        <Row label="Services" value={formatMoney(pricing.servicesGross + pricing.registrationGross)} />
-        <Row label="Discount" value={`− ${formatMoney(pricing.discount)}`} />
-        <Row label="Net Payable" value={formatMoney(pricing.net)} brand />
+        <Row label="Registration" value={pricing.effectiveOffer === 'senior' ? 'FREE' : formatMoney(pricing.registrationFee)} />
+        <Row label="Package Fee" value={pricing.effectiveOffer === 'senior' ? 'FREE' : formatMoney(pricing.packageFee)} />
+        <Row label="Services" value={formatMoney(pricing.servicesTotal)} />
+        <Row label="Net Payable" value={formatMoney(pricing.gross)} brand />
       </dl>
     </div>
   );

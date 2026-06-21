@@ -8,6 +8,7 @@ import { getProfile } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
 import { memberSchema, firstError } from '@/lib/validations';
 import { getKarachiDate } from '@/lib/utils';
+import { memberBillSnapshot } from '@/lib/billing';
 
 export type FormState = { error?: string };
 
@@ -32,7 +33,6 @@ function toRow(input: ReturnType<typeof memberSchema.parse>) {
     email: input.email || null,
     joining_date: input.joining_date,
     plan_id: input.plan_id || null,
-    monthly_fee: input.monthly_fee,
     due_day: input.due_day,
     status: input.status,
     age: input.age ?? null,
@@ -67,9 +67,15 @@ export async function createMember(_prev: FormState, formData: FormData): Promis
   const serviceIds = (formData.getAll('service_ids') as string[]).filter(Boolean);
 
   const supabase = createClient();
+  const snap = await memberBillSnapshot(supabase, {
+    planId: parsed.data.plan_id || null,
+    serviceIds,
+    offer: parsed.data.offer_code,
+    age: parsed.data.age ?? null,
+  });
   const { data, error } = await supabase
     .from('members')
-    .insert(toRow(parsed.data))
+    .insert({ ...toRow(parsed.data), ...snap })
     .select('id')
     .single();
 
@@ -95,10 +101,19 @@ export async function updateMember(
   const serviceIds = (formData.getAll('service_ids') as string[]).filter(Boolean);
 
   const supabase = createClient();
-  const { error } = await supabase.from('members').update(toRow(parsed.data)).eq('id', id);
+  await syncServices(supabase, id, serviceIds);
+  const snap = await memberBillSnapshot(supabase, {
+    planId: parsed.data.plan_id || null,
+    serviceIds,
+    offer: parsed.data.offer_code,
+    age: parsed.data.age ?? null,
+  });
+  const { error } = await supabase
+    .from('members')
+    .update({ ...toRow(parsed.data), ...snap })
+    .eq('id', id);
   if (error) return { error: error.message };
 
-  await syncServices(supabase, id, serviceIds);
   await logAudit('update', 'member', id, { full_name: parsed.data.full_name });
   revalidatePath('/members');
   redirect('/members');
@@ -124,18 +139,10 @@ export async function createCouple(_prev: FormState, formData: FormData): Promis
     const planId = String(formData.get(`${prefix}_plan_id`) ?? '') || null;
     const ageRaw = String(formData.get(`${prefix}_age`) ?? '');
     const age = ageRaw === '' ? null : Number(ageRaw);
+    const svcIds = (formData.getAll(`${prefix}_service_ids`) as string[]).filter(Boolean);
+    const offer = age != null && age >= 67 ? 'senior' : offerCode;
 
-    let monthlyFee = 0;
-    if (planId) {
-      const { data: plan } = await supabase
-        .from('membership_plans')
-        .select('monthly_fee')
-        .eq('id', planId)
-        .single();
-      monthlyFee = Number(plan?.monthly_fee ?? 0);
-    }
-    const isSenior = age != null && age >= 67;
-    if (isSenior) monthlyFee = 0; // senior = free package
+    const snap = await memberBillSnapshot(supabase, { planId, serviceIds: svcIds, offer, age });
 
     const { data: member, error } = await supabase
       .from('members')
@@ -146,17 +153,16 @@ export async function createCouple(_prev: FormState, formData: FormData): Promis
         age,
         joining_date: joining,
         plan_id: planId,
-        monthly_fee: monthlyFee,
-        offer_code: isSenior ? 'senior' : offerCode,
+        offer_code: offer,
         due_day: 5,
         status: 'active',
         couple_group_id: groupId,
+        ...snap,
       })
       .select('id, registration_number')
       .single();
     if (error) throw new Error(error.message);
 
-    const svcIds = (formData.getAll(`${prefix}_service_ids`) as string[]).filter(Boolean);
     if (svcIds.length) {
       const { data: svcs } = await supabase.from('services').select('id, price').in('id', svcIds);
       const rows = (svcs ?? []).map((s: any) => ({

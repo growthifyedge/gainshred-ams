@@ -299,49 +299,51 @@ async function CollectionReport({ month, supabase }: { month?: string; supabase:
   );
 }
 
-/* ------------------------------- Pending dues ------------------------------- */
+/* --------------------------- Pending dues / receivables --------------------- */
 async function DuesReport({ supabase }: { supabase: any }) {
   const { data } = await supabase
-    .from('due_details')
-    .select('*')
-    .gt('balance', 0)
-    .order('due_date');
+    .from('member_billing')
+    .select('registration_number, full_name, package_name, gross_payable, discount, net_payable, paid, receivable, status')
+    .gt('gross_payable', 0)
+    .order('receivable', { ascending: false });
 
   const rows = (data ?? []).map((d: any) => ({
-    member: d.member_name,
-    month: monthLabel(d.billing_month),
-    fee: d.amount_due,
-    paid: d.amount_paid,
-    balance: d.balance,
-    penalty_due: d.penalty_due,
-    due_date: d.due_date,
+    reg: d.registration_number ?? '',
+    member: d.full_name,
+    package: d.package_name ?? '',
+    gross: d.gross_payable,
+    discount: d.discount,
+    net: d.net_payable,
+    paid: d.paid,
+    receivable: d.receivable,
     status: d.status,
   }));
-  const totalBalance = rows.reduce((s: number, r: any) => s + Number(r.balance), 0);
-  const totalPenalty = rows.reduce((s: number, r: any) => s + Number(r.penalty_due), 0);
+  const totalReceivable = rows.reduce((s: number, r: any) => s + Number(r.receivable), 0);
+  const totalNet = rows.reduce((s: number, r: any) => s + Number(r.net), 0);
 
   return (
     <div>
       <div className="mb-4 flex items-center gap-3">
         <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2">
-          <StatCard label="Total outstanding balance" value={formatMoney(totalBalance)} accent="amber" />
-          <StatCard label="Total outstanding penalty" value={formatMoney(totalPenalty)} accent="red" />
+          <StatCard label="Total net payable" value={formatMoney(totalNet)} accent="amber" />
+          <StatCard label="Total receivable / due" value={formatMoney(totalReceivable)} accent="red" />
         </div>
         <ExportCSV rows={rows} filename="pending-dues.csv" />
       </div>
 
       <ReportTable
-        headers={['Member', 'Month', 'Fee', 'Paid', 'Balance', 'Penalty due', 'Due date', 'Status']}
-        empty="No pending dues. 🎉"
+        headers={['Reg #', 'Member', 'Package', 'Gross', 'Discount', 'Net', 'Paid', 'Receivable', 'Status']}
+        empty="No outstanding receivables. 🎉"
         rows={rows.map((r: any) => [
+          r.reg,
           r.member,
-          r.month,
-          formatMoney(r.fee),
+          r.package,
+          formatMoney(r.gross),
+          formatMoney(r.discount),
+          formatMoney(r.net),
           formatMoney(r.paid),
-          formatMoney(r.balance),
-          formatMoney(r.penalty_due),
-          formatDate(r.due_date),
-          <StatusBadge key="s" status={r.status} />,
+          formatMoney(r.receivable),
+          <StatusBadge key="s" status={r.status === 'due' ? 'pending' : r.status} />,
         ])}
       />
     </div>

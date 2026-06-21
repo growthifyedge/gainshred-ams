@@ -63,20 +63,12 @@ export default function MemberForm({
 }) {
   const [state, formAction] = useFormState<FormState, FormData>(action, {});
   const [planId, setPlanId] = useState(initial?.plan_id ?? '');
-  const [fee, setFee] = useState<string>(
-    initial?.monthly_fee != null ? String(initial.monthly_fee) : ''
-  );
   const [age, setAge] = useState<string>(initial?.age != null ? String(initial.age) : '');
   const [offer, setOffer] = useState<OfferCode>((initial?.offer_code as OfferCode) ?? 'none');
   const [selected, setSelected] = useState<Set<string>>(new Set(initial?.service_ids ?? []));
 
   const ageNum = age === '' ? null : Number(age);
   const eff = effectiveOffer(offer, ageNum);
-
-  function recalcFee(pId: string, off: OfferCode, ag: number | null) {
-    const plan = plans.find((p) => p.id === pId) ?? null;
-    setFee(String(computePackage({ plan, services: [], offer: off, age: ag }).monthlyFee));
-  }
 
   const pricing = useMemo(() => {
     const plan = plans.find((p) => p.id === planId) ?? null;
@@ -122,7 +114,7 @@ export default function MemberForm({
           <div>
             <label className="label" htmlFor="age">Age</label>
             <input id="age" name="age" type="number" min={0} max={120} value={age}
-              onChange={(e) => { setAge(e.target.value); recalcFee(planId, offer, e.target.value === '' ? null : Number(e.target.value)); }}
+              onChange={(e) => setAge(e.target.value)}
               className="input" placeholder="e.g. 30" />
             {pricing.isSenior && <p className="mt-1 text-xs font-medium text-emerald-600">Senior Citizen Offer applies (67+)</p>}
           </div>
@@ -135,7 +127,7 @@ export default function MemberForm({
           <div>
             <label className="label" htmlFor="plan_id">Membership duration / package</label>
             <select id="plan_id" name="plan_id" value={planId}
-              onChange={(e) => { setPlanId(e.target.value); recalcFee(e.target.value, offer, ageNum); }}
+              onChange={(e) => setPlanId(e.target.value)}
               className="input">
               <option value="">— None —</option>
               {plans.map((p) => (
@@ -148,15 +140,10 @@ export default function MemberForm({
           <div>
             <label className="label" htmlFor="offer_code">Offer</label>
             <select id="offer_code" name="offer_code" value={offer}
-              onChange={(e) => { const v = e.target.value as OfferCode; setOffer(v); recalcFee(planId, v, ageNum); }}
+              onChange={(e) => setOffer(e.target.value as OfferCode)}
               className="input">
               {OFFER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
-          </div>
-          <div>
-            <label className="label" htmlFor="monthly_fee">Monthly fee (Rs.) *</label>
-            <input id="monthly_fee" name="monthly_fee" type="number" min={0} step="1" required value={fee} onChange={(e) => setFee(e.target.value)} className="input" />
-            <p className="mt-1 text-xs text-neutral-400">Auto-filled — override if needed.</p>
           </div>
           <div>
             <label className="label" htmlFor="due_day">Payment due day (1–28) *</label>
@@ -213,13 +200,15 @@ export default function MemberForm({
           {pricing.offerLabel && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">{pricing.offerLabel}</span>}
         </div>
         <dl className="space-y-1">
-          <Row label="Registration Fee" value={feeOrFree(pricing.registrationGross, pricing.registrationPayable, eff)} />
-          <Row label="Package Fee" value={eff === 'senior' ? 'FREE' : formatMoney(pricing.packageGross)} />
-          <Row label="Services Total" value={formatMoney(pricing.servicesGross)} />
+          <Row label="Registration Fee" value={eff === 'senior' ? 'FREE' : formatMoney(pricing.registrationFee)} />
+          <Row label="Package Fee" value={eff === 'senior' ? 'FREE' : formatMoney(pricing.packageFee)} />
+          <Row label="Services Total" value={formatMoney(pricing.servicesTotal)} />
           <Row label="Gross Payable" value={formatMoney(pricing.gross)} bold />
-          <Row label="Discount" value={`− ${formatMoney(pricing.discount)}`} />
-          <Row label="Net Payable" value={formatMoney(pricing.net)} brand />
+          <Row label="Net Payable" value={formatMoney(pricing.gross)} brand />
         </dl>
+        {pricing.offerSaving > 0 && (
+          <p className="mt-1 text-xs text-emerald-600">Offer saving: {formatMoney(pricing.offerSaving)}</p>
+        )}
         <p className="mt-2 text-xs text-neutral-400">Collect payment from the Payments section after saving.</p>
       </div>
 
@@ -236,11 +225,6 @@ export default function MemberForm({
       </div>
     </form>
   );
-}
-
-function feeOrFree(gross: number, payable: number, eff: OfferCode) {
-  if (eff === 'senior') return 'FREE';
-  return formatMoney(payable);
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

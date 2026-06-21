@@ -71,37 +71,30 @@ export async function createPayment(_prev: FormState, formData: FormData): Promi
     }
   }
 
-  // Find or open the due for this member + month (works for staff via SECURITY DEFINER).
-  const { data: dueId, error: dueErr } = await supabase.rpc('get_or_create_due', {
-    p_member: input.member_id,
-    p_month: monthDate,
-  });
-  if (dueErr) return { error: dueErr.message };
-
-  // Manual discount: percentage / fixed off the gross (the month's fee).
+  // Manual discount: percentage / fixed off the member's GROSS bill (member_billing).
   let discountAmount = 0;
-  if (hasDiscount && dueId) {
-    const { data: due } = await supabase
-      .from('dues')
-      .select('amount_due')
-      .eq('id', dueId)
-      .single();
-    const gross = Number(due?.amount_due ?? 0);
+  if (hasDiscount) {
+    const { data: bill } = await supabase
+      .from('member_billing')
+      .select('gross_payable, discount')
+      .eq('member_id', input.member_id)
+      .maybeSingle();
+    const gross = Number(bill?.gross_payable ?? 0);
+    const existingDiscount = Number(bill?.discount ?? 0);
     discountAmount =
       input.discount_type === 'percent'
         ? (gross * input.discount_value) / 100
         : input.discount_value;
-    discountAmount = Math.min(Math.max(discountAmount, 0), gross);
+    // Don't let total discount exceed the gross bill.
+    discountAmount = Math.min(Math.max(discountAmount, 0), Math.max(gross - existingDiscount, 0));
     discountAmount = Math.round(discountAmount * 100) / 100;
-    // Store the standing discount on the due so dues/receivable reflect net payable.
-    await supabase.from('dues').update({ discount: discountAmount }).eq('id', dueId);
   }
 
   const { data, error } = await supabase
     .from('payments')
     .insert({
       member_id: input.member_id,
-      due_id: dueId,
+      due_id: null,
       payment_month: monthDate,
       amount: input.amount,
       penalty_amount: input.penalty_amount,

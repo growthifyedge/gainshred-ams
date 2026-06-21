@@ -21,7 +21,7 @@ export const memberSchema = z.object({
   email: optionalEmail,
   joining_date: z.string().min(1, 'Joining date is required'),
   plan_id: z.string().uuid().optional().or(z.literal('')),
-  monthly_fee: z.coerce.number().min(0, 'Fee cannot be negative'),
+  monthly_fee: z.coerce.number().min(0, 'Fee cannot be negative').default(0),
   due_day: z.coerce
     .number()
     .int()
