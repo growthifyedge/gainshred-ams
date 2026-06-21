@@ -25,16 +25,13 @@ async function createMemberFrom(
     notes?: string | null;
     couple_group_id?: string | null;
     service_ids: string[];
-    // Age used ONLY for pricing. For couple members we pass null so a 67+
-    // husband/wife is not auto-converted to the Senior offer.
-    pricingAge?: number | null;
   }
 ) {
   const snap = await memberBillSnapshot(supabase, {
     planId: data.plan_id ?? null,
     serviceIds: data.service_ids,
     offer: data.offer_code,
-    age: 'pricingAge' in data ? data.pricingAge ?? null : data.age ?? null,
+    age: data.age ?? null,
   });
   const { data: member, error } = await supabase
     .from('members')
@@ -116,6 +113,10 @@ export async function convertAdmission(
     }
 
     const groupId = randomUUID();
+    // Same per-person offer rule as the working Add Member → Couple flow
+    // (createCouple): 67+ becomes senior; otherwise husband=none, wife=wife.
+    const husbandOffer = req.age != null && req.age >= 67 ? 'senior' : 'none';
+    const wifeOffer = sp.age != null && sp.age >= 67 ? 'senior' : 'wife';
     let husband, wife;
     try {
       husband = await createMemberFrom(supabase, {
@@ -125,11 +126,10 @@ export async function convertAdmission(
         age: req.age,
         joining_date: joining,
         plan_id: req.selected_membership_plan_id,
-        offer_code: 'none', // husband is always full price
+        offer_code: husbandOffer,
         notes: req.notes,
         couple_group_id: groupId,
         service_ids: husbandServices,
-        pricingAge: null, // keep husband full price even if 67+
       });
       wife = await createMemberFrom(supabase, {
         full_name: sp.full_name,
@@ -138,11 +138,10 @@ export async function convertAdmission(
         age: sp.age ?? null,
         joining_date: joining,
         plan_id: sp.plan_id ?? null,
-        offer_code: 'wife', // wife = 50% off eligible services
+        offer_code: wifeOffer,
         notes: null,
         couple_group_id: groupId,
         service_ids: Array.isArray(sp.service_ids) ? sp.service_ids : [],
-        pricingAge: null, // wife stays 50%, not auto-senior
       });
     } catch (e: any) {
       return { error: e?.message ?? 'Could not convert the couple.' };
