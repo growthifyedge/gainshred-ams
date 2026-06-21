@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --gs-black: #0a0a0a;
+  --gs-red: #e11d2a;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
+  @apply bg-neutral-100 text-neutral-900 antialiased;
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-brand text-white hover:bg-brand-dark;
+  }
+  .btn-dark {
+    @apply btn bg-brand-black text-white hover:bg-neutral-800;
+  }
+  .btn-ghost {
+    @apply btn border border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50;
+  }
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+  .input {
+    @apply w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20;
+  }
+  .label {
+    @apply mb-1 block text-sm font-medium text-neutral-700;
+  }
+  .card {
+    @apply rounded-xl border border-neutral-200 bg-white shadow-sm;
+  }
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold;
+  }
+  .th {
+    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500;
+  }
+  .td {
+    @apply px-4 py-3 text-sm text-neutral-800;
+  }
+}
+
+/* Printable receipt */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+  }
+  .print-area {
+    box-shadow: none !important;
+    border: none !important;
+  }
+  @page {
+    margin: 14mm;
+  }
+}
