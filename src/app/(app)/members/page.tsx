@@ -4,7 +4,7 @@ import { getProfile } from '@/lib/auth';
 import { PageHeader, StatusBadge, EmptyRow } from '@/components/ui';
 import ConfirmSubmit from '@/components/ConfirmSubmit';
 import { formatMoney, formatDate } from '@/lib/utils';
-import { setMemberStatus, deleteMember } from './actions';
+import { setMemberStatus, deleteMemberPermanently } from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -117,9 +117,9 @@ export default async function MembersPage({
                               <button className="btn-ghost btn-sm">Activate</button>
                             </form>
                           )}
-                          <form action={deleteMember.bind(null, m.id)}>
+                          <form action={deleteMemberPermanently.bind(null, m.id)}>
                             <ConfirmSubmit
-                              message="Delete this member? If they have payment history they will be deactivated instead."
+                              message="Delete this member permanently? This will also remove all payments, dues, attendance, receipts, and related records. This action cannot be undone."
                               className="btn-sm rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-brand hover:bg-red-50"
                             >
                               Delete

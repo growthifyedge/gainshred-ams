@@ -202,18 +202,36 @@ export async function setMemberStatus(id: string, status: 'active' | 'inactive' 
   revalidatePath('/members');
 }
 
-export async function deleteMember(id: string) {
+// PERMANENT hard delete — removes the member and ALL related records.
+// This is intentional and irreversible (no deactivation, no archive).
+export async function deleteMemberPermanently(id: string) {
   const profile = await getProfile();
   if (profile?.role !== 'admin') return;
 
   const supabase = createClient();
-  // Members with payment history cannot be hard-deleted (FK restrict) — deactivate instead.
+
+  // Delete children first. payments.member_id is ON DELETE RESTRICT, so payments
+  // MUST be removed before the member; the other tables also cascade, but we
+  // delete explicitly so nothing is ever left orphaned.
+  await supabase.from('member_services').delete().eq('member_id', id);
+  await supabase.from('attendance').delete().eq('member_id', id);
+  await supabase.from('penalties').delete().eq('member_id', id);
+  await supabase.from('payments').delete().eq('member_id', id);
+  await supabase.from('dues').delete().eq('member_id', id);
+
+  // Unlink (do not delete) any admission request that converted into this member.
+  await supabase
+    .from('admission_requests')
+    .update({ converted_member_id: null })
+    .eq('converted_member_id', id);
+
+  // Finally, the member itself.
   const { error } = await supabase.from('members').delete().eq('id', id);
-  if (error) {
-    await supabase.from('members').update({ status: 'inactive' }).eq('id', id);
-    await logAudit('deactivate_fallback', 'member', id, { reason: error.message });
-  } else {
-    await logAudit('delete', 'member', id);
-  }
+
+  await logAudit('delete_permanent', 'member', id, { error: error?.message ?? null });
   revalidatePath('/members');
+  revalidatePath('/dues');
+  revalidatePath('/payments');
+  revalidatePath('/attendance');
+  revalidatePath('/dashboard');
 }
