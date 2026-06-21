@@ -14,7 +14,7 @@ export default async function NewPaymentPage({
   const supabase = createClient();
   const { data: members } = await supabase
     .from('members')
-    .select('id, full_name, monthly_fee, status, advance_balance')
+    .select('id, full_name, registration_number, monthly_fee, status, advance_balance')
     .neq('status', 'inactive')
     .order('full_name');
 

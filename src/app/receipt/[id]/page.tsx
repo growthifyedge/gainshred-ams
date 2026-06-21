@@ -85,6 +85,9 @@ export default async function ReceiptPage({ params }: { params: { id: string } }
             <div>
               <p className="text-neutral-400">Member</p>
               <p className="font-semibold">{r.member_name}</p>
+              {r.registration_number && (
+                <p className="font-mono text-xs text-neutral-500">{r.registration_number}</p>
+              )}
               {r.member_phone && <p className="text-neutral-500">{r.member_phone}</p>}
             </div>
             <div className="text-right">
@@ -130,7 +133,23 @@ export default async function ReceiptPage({ params }: { params: { id: string } }
           <table className="mt-6 w-full text-sm">
             <tbody className="divide-y divide-neutral-200">
               <tr>
-                <td className="py-2 text-neutral-600">Membership fee</td>
+                <td className="py-2 text-neutral-600">Gross payable (month)</td>
+                <td className="py-2 text-right font-medium">{formatMoney(r.gross_payable)}</td>
+              </tr>
+              {Number(r.due_discount) > 0 && (
+                <tr>
+                  <td className="py-2 text-neutral-600">Discount</td>
+                  <td className="py-2 text-right font-medium text-neutral-500">
+                    − {formatMoney(r.due_discount)}
+                  </td>
+                </tr>
+              )}
+              <tr>
+                <td className="py-2 text-neutral-600">Net payable</td>
+                <td className="py-2 text-right font-medium">{formatMoney(r.net_payable)}</td>
+              </tr>
+              <tr>
+                <td className="py-2 text-neutral-600">Fee paid (this receipt)</td>
                 <td className="py-2 text-right font-medium">{formatMoney(r.amount)}</td>
               </tr>
               {Number(r.penalty_amount) > 0 && (

@@ -22,7 +22,10 @@ export default async function AttendancePage({
     .order('full_name', { ascending: true });
   if (q) {
     const safe = q.replace(/[,()*%:]/g, ' ').trim();
-    if (safe) memberQuery = memberQuery.or(`full_name.ilike.%${safe}%,phone.ilike.%${safe}%`);
+    if (safe)
+      memberQuery = memberQuery.or(
+        `full_name.ilike.%${safe}%,phone.ilike.%${safe}%,registration_number.ilike.%${safe}%`
+      );
   }
 
   const [{ data: members }, { data: inside }, { data: today }, { count: activeCount }] =
@@ -71,7 +74,7 @@ export default async function AttendancePage({
           <input
             name="q"
             defaultValue={q ?? ''}
-            placeholder="Search member name or phone…"
+            placeholder="Search name, phone or GS-0001…"
             className="input max-w-xs"
           />
           <button className="btn-ghost">Search</button>
@@ -93,7 +96,12 @@ export default async function AttendancePage({
                 {members && members.length > 0 ? (
                   members.map((m: any) => (
                     <tr key={m.member_id}>
-                      <td className="td font-medium">{m.full_name}</td>
+                      <td className="td">
+                        <div className="font-medium">{m.full_name}</div>
+                        <div className="font-mono text-xs text-neutral-400">
+                          {m.registration_number ?? '—'}
+                        </div>
+                      </td>
                       <td className="td">{m.phone || '—'}</td>
                       <td className="td">
                         <StatusBadge status={m.presence === 'inside' ? 'inside' : 'outside'} />

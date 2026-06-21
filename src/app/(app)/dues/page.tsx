@@ -17,10 +17,7 @@ export default async function DuesPage({
   const isAdmin = profile?.role === 'admin';
   const supabase = createClient();
 
-  let query = supabase
-    .from('due_details')
-    .select('*')
-    .order('due_date', { ascending: true });
+  let query = supabase.from('due_details').select('*').order('due_date', { ascending: true });
 
   const month = searchParams.month?.trim();
   const status = searchParams.status?.trim();
@@ -29,14 +26,21 @@ export default async function DuesPage({
 
   const { data } = await query;
 
+  // Search by member name OR registration number.
   const q = searchParams.q?.trim()?.toLowerCase();
   const rows = (data ?? []).filter((d: any) =>
-    q ? (d.member_name ?? '').toLowerCase().includes(q) : true
+    q
+      ? (d.member_name ?? '').toLowerCase().includes(q) ||
+        (d.registration_number ?? '').toLowerCase().includes(q)
+      : true
   );
 
   return (
     <div>
-      <PageHeader title="Dues" subtitle="Member-wise monthly dues, balances and penalties." />
+      <PageHeader
+        title="Dues"
+        subtitle="Receivables: gross payable − discount = net payable; net − received = due."
+      />
 
       {isAdmin && (
         <div className="mb-5">
@@ -45,16 +49,11 @@ export default async function DuesPage({
       )}
 
       <form className="mb-4 flex flex-wrap gap-3" method="get">
-        <input
-          name="q"
-          defaultValue={searchParams.q ?? ''}
-          placeholder="Search member…"
-          className="input max-w-xs"
-        />
+        <input name="q" defaultValue={searchParams.q ?? ''} placeholder="Search name or GS-0001…" className="input max-w-xs" />
         <input name="month" type="month" defaultValue={month ?? ''} className="input max-w-[180px]" />
         <select name="status" defaultValue={status ?? 'all'} className="input max-w-[160px]">
           <option value="all">All statuses</option>
-          <option value="pending">Pending</option>
+          <option value="pending">Due</option>
           <option value="partial">Partial</option>
           <option value="overdue">Overdue</option>
           <option value="paid">Paid</option>
@@ -67,14 +66,16 @@ export default async function DuesPage({
           <table className="min-w-full divide-y divide-neutral-200">
             <thead className="bg-neutral-50">
               <tr>
-                <th className="th">Member</th>
+                <th className="th">Reg # / Member</th>
                 <th className="th">Month</th>
-                <th className="th">Fee</th>
-                <th className="th">Paid</th>
-                <th className="th">Balance</th>
-                <th className="th">Penalty due</th>
+                <th className="th">Gross</th>
+                <th className="th">Discount</th>
+                <th className="th">Net payable</th>
+                <th className="th">Received</th>
+                <th className="th">Receivable / Due</th>
                 <th className="th">Due date</th>
                 <th className="th">Status</th>
+                <th className="th">Last payment</th>
                 <th className="th text-right">Actions</th>
               </tr>
             </thead>
@@ -82,41 +83,37 @@ export default async function DuesPage({
               {rows.length > 0 ? (
                 rows.map((d: any) => (
                   <tr key={d.id}>
-                    <td className="td font-medium">{d.member_name}</td>
+                    <td className="td">
+                      <div className="font-medium">{d.member_name}</div>
+                      <div className="font-mono text-xs text-neutral-400">{d.registration_number ?? '—'}</div>
+                    </td>
                     <td className="td">{monthLabel(d.billing_month)}</td>
-                    <td className="td">{formatMoney(d.amount_due)}</td>
+                    <td className="td">{formatMoney(d.gross_payable)}</td>
+                    <td className="td">{formatMoney(d.discount)}</td>
+                    <td className="td">{formatMoney(d.net_payable)}</td>
                     <td className="td">{formatMoney(d.amount_paid)}</td>
-                    <td className="td">{formatMoney(d.balance)}</td>
-                    <td className="td text-brand">
-                      {d.penalty_waived ? (
-                        <span className="text-xs text-neutral-400">waived</span>
-                      ) : (
-                        formatMoney(d.penalty_due)
+                    <td className="td font-semibold text-brand">
+                      {formatMoney(d.balance)}
+                      {!d.penalty_waived && Number(d.penalty_due) > 0 && (
+                        <div className="text-xs font-normal text-amber-600">
+                          + penalty {formatMoney(d.penalty_due)}
+                        </div>
                       )}
                     </td>
                     <td className="td">{formatDate(d.due_date)}</td>
                     <td className="td">
                       <StatusBadge status={d.status} />
                     </td>
+                    <td className="td">{d.last_payment_date ? formatDate(d.last_payment_date) : '—'}</td>
                     <td className="td">
                       <div className="flex items-center justify-end gap-2">
                         {d.balance > 0 && (
-                          <Link
-                            href={`/payments/new?member=${d.member_id}`}
-                            className="btn-ghost btn-sm"
-                          >
+                          <Link href={`/payments/new?member=${d.member_id}`} className="btn-ghost btn-sm">
                             Collect
                           </Link>
                         )}
                         {isAdmin && Number(d.penalty_due) > 0 && !d.penalty_waived && (
-                          <form
-                            action={waivePenalty.bind(
-                              null,
-                              d.id,
-                              d.member_id,
-                              Number(d.penalty_due)
-                            )}
-                          >
+                          <form action={waivePenalty.bind(null, d.id, d.member_id, Number(d.penalty_due))}>
                             <button className="btn-sm rounded-lg border border-amber-200 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50">
                               Waive penalty
                             </button>
@@ -127,7 +124,7 @@ export default async function DuesPage({
                   </tr>
                 ))
               ) : (
-                <EmptyRow colSpan={9} text="No dues found. Generate dues for a month to begin." />
+                <EmptyRow colSpan={11} text="No dues found. Generate dues for a month to begin." />
               )}
             </tbody>
           </table>

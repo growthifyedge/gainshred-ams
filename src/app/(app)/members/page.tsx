@@ -19,7 +19,7 @@ export default async function MembersPage({
 
   let query = supabase
     .from('members')
-    .select('id, full_name, phone, email, monthly_fee, due_day, status, plan:membership_plans(name)')
+    .select('id, registration_number, full_name, phone, email, monthly_fee, due_day, status, plan:membership_plans(name)')
     .order('full_name', { ascending: true });
 
   const q = searchParams.q?.trim();
@@ -28,7 +28,9 @@ export default async function MembersPage({
     // Strip characters that have special meaning in a PostgREST `or` filter.
     const safe = q.replace(/[,()*%:]/g, ' ').trim();
     if (safe) {
-      query = query.or(`full_name.ilike.%${safe}%,phone.ilike.%${safe}%,email.ilike.%${safe}%`);
+      query = query.or(
+        `full_name.ilike.%${safe}%,phone.ilike.%${safe}%,email.ilike.%${safe}%,registration_number.ilike.%${safe}%`
+      );
     }
   }
   if (status && status !== 'all') query = query.eq('status', status);
@@ -54,7 +56,7 @@ export default async function MembersPage({
         <input
           name="q"
           defaultValue={q ?? ''}
-          placeholder="Search name, phone or email…"
+          placeholder="Search name, phone, email or GS-0001…"
           className="input max-w-xs"
         />
         <select name="status" defaultValue={status ?? 'all'} className="input max-w-[160px]">
@@ -84,7 +86,12 @@ export default async function MembersPage({
               {members && members.length > 0 ? (
                 members.map((m: any) => (
                   <tr key={m.id}>
-                    <td className="td font-medium">{m.full_name}</td>
+                    <td className="td">
+                      <div className="font-medium">{m.full_name}</div>
+                      <div className="font-mono text-xs text-neutral-400">
+                        {m.registration_number ?? '—'}
+                      </div>
+                    </td>
                     <td className="td">
                       <div>{m.phone || '—'}</div>
                       <div className="text-xs text-neutral-400">{m.email || ''}</div>

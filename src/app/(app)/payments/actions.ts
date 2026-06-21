@@ -29,6 +29,8 @@ export async function createPayment(_prev: FormState, formData: FormData): Promi
     advance_applied: formData.get('advance_applied'),
     payment_method: formData.get('payment_method'),
     payment_date: formData.get('payment_date'),
+    discount_type: formData.get('discount_type'),
+    discount_value: formData.get('discount_value'),
     notes: formData.get('notes'),
     receipt_image_url: formData.get('receipt_image_url'),
   });
@@ -38,14 +40,17 @@ export async function createPayment(_prev: FormState, formData: FormData): Promi
   const monthDate = monthToDate(input.payment_month);
   const supabase = createClient();
 
+  const hasDiscount = input.discount_type !== 'none' && input.discount_value > 0;
+
   // Require the transaction to actually do something.
   if (
     input.amount === 0 &&
     input.penalty_amount === 0 &&
     input.advance_added === 0 &&
-    input.advance_applied === 0
+    input.advance_applied === 0 &&
+    !hasDiscount
   ) {
-    return { error: 'Enter a fee, penalty, advance deposit, or advance to apply.' };
+    return { error: 'Enter a fee, penalty, advance, or a discount to apply.' };
   }
 
   // Advance applied cannot exceed the fee it is paying for.
@@ -73,6 +78,25 @@ export async function createPayment(_prev: FormState, formData: FormData): Promi
   });
   if (dueErr) return { error: dueErr.message };
 
+  // Manual discount: percentage / fixed off the gross (the month's fee).
+  let discountAmount = 0;
+  if (hasDiscount && dueId) {
+    const { data: due } = await supabase
+      .from('dues')
+      .select('amount_due')
+      .eq('id', dueId)
+      .single();
+    const gross = Number(due?.amount_due ?? 0);
+    discountAmount =
+      input.discount_type === 'percent'
+        ? (gross * input.discount_value) / 100
+        : input.discount_value;
+    discountAmount = Math.min(Math.max(discountAmount, 0), gross);
+    discountAmount = Math.round(discountAmount * 100) / 100;
+    // Store the standing discount on the due so dues/receivable reflect net payable.
+    await supabase.from('dues').update({ discount: discountAmount }).eq('id', dueId);
+  }
+
   const { data, error } = await supabase
     .from('payments')
     .insert({
@@ -83,6 +107,7 @@ export async function createPayment(_prev: FormState, formData: FormData): Promi
       penalty_amount: input.penalty_amount,
       advance_added: input.advance_added,
       advance_applied: input.advance_applied,
+      discount: discountAmount,
       payment_method: input.payment_method,
       payment_date: input.payment_date,
       notes: input.notes || null,
@@ -98,6 +123,7 @@ export async function createPayment(_prev: FormState, formData: FormData): Promi
     receipt_number: data.receipt_number,
     amount: input.amount,
     penalty: input.penalty_amount,
+    discount: discountAmount,
     advance_added: input.advance_added,
     advance_applied: input.advance_applied,
   });

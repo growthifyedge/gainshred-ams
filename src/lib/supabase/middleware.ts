@@ -32,9 +32,11 @@ export async function updateSession(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const isLogin = path.startsWith('/login');
+  // Public routes that do NOT require a login (e.g. the online admission form).
+  const isPublic = isLogin || path.startsWith('/admission');
 
-  // Not signed in and not on the login page -> go to login.
-  if (!user && !isLogin) {
+  // Not signed in and not on a public page -> go to login.
+  if (!user && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);

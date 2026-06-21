@@ -34,10 +34,16 @@ export default async function ExportPage() {
           filename={`membership_plans-${today}.csv`}
         />
         <ExportCard
-          title="Dues"
-          desc="Every member's monthly dues, balances and penalties."
+          title="Dues / Receivables"
+          desc="Reg #, gross, discount, net payable, received, receivable, status."
           type="dues"
           filename={`dues-${today}.csv`}
+        />
+        <ExportCard
+          title="Admission Requests"
+          desc="Online admission submissions with status and converted reg number."
+          type="admission_requests"
+          filename={`admission_requests-${today}.csv`}
         />
 
         {/* Date-range exports */}

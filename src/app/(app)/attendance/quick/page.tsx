@@ -30,7 +30,10 @@ export default async function QuickCheckInPage({
       .eq('member_status', 'active')
       .order('full_name', { ascending: true })
       .limit(25);
-    if (safe) mq = mq.or(`full_name.ilike.%${safe}%,phone.ilike.%${safe}%`);
+    if (safe)
+      mq = mq.or(
+        `full_name.ilike.%${safe}%,phone.ilike.%${safe}%,registration_number.ilike.%${safe}%`
+      );
     const { data } = await mq;
     results = data ?? [];
   }
