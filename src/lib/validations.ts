@@ -70,7 +70,9 @@ export const admissionSchema = z.object({
   gender: z.string().trim().min(1, 'Select a gender'),
   address: optionalString, // optional
   emergency_contact: optionalString, // optional
-  plan_id: z.string().uuid('Select a membership duration'),
+  // Optional here; validated conditionally in the action (Senior needs no plan;
+  // Single/Wife need a plan).
+  plan_id: z.string().uuid().optional().or(z.literal('')),
   offer_code: z.enum(['none', 'couple', 'wife', 'senior']).default('none'),
   preferred_joining_date: z.string().trim().min(1, 'Select a joining date'),
   notes: optionalString, // optional

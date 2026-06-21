@@ -937,3 +937,17 @@ $$;
 -- ############################################################################
 -- END PHASE 5
 -- ############################################################################
+
+
+-- ############################################################################
+-- PHASE 7 — couple payload for the public admission form (admission_requests)
+-- (Idempotent; also shipped standalone as supabase/upgrade_phase7.sql)
+-- ############################################################################
+alter table public.admission_requests
+  add column if not exists member_type text not null default 'single'
+  check (member_type in ('single', 'couple'));
+alter table public.admission_requests
+  add column if not exists spouse jsonb;
+-- ############################################################################
+-- END PHASE 7
+-- ############################################################################

@@ -65,7 +65,19 @@ export default async function AdmissionsPage({
                     <div className="flex items-center gap-2">
                       <h2 className="text-lg font-semibold">{r.full_name}</h2>
                       <StatusBadge status={r.status} />
+                      {r.member_type === 'couple' && (
+                        <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-700">
+                          Couple
+                        </span>
+                      )}
                     </div>
+                    {r.member_type === 'couple' && r.spouse && (
+                      <p className="mt-0.5 text-sm text-sky-700">
+                        Wife: {r.spouse.full_name}
+                        {r.spouse.phone ? ` · ${r.spouse.phone}` : ''}
+                        {r.spouse.age ? ` · Age ${r.spouse.age}` : ''} (50% offer)
+                      </p>
+                    )}
                     <p className="text-sm text-neutral-500">
                       {r.phone || '—'} · {r.email || '—'}
                       {r.age ? ` · Age ${r.age}` : ''}
