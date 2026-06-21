@@ -1,11 +1,24 @@
 import { z } from 'zod';
 
-const optionalString = z.string().trim().optional().or(z.literal(''));
+// Null-safe optional string. IMPORTANT: a form field that is absent comes through
+// as `null` (FormData.get returns null). The previous `.optional().or(z.literal(''))`
+// was a UNION that rejected `null` and produced Zod's generic "Invalid input" error.
+// This version coerces null/undefined/anything → trimmed string, so it never fails.
+const optionalString = z.preprocess(
+  (v) => (typeof v === 'string' ? v.trim() : ''),
+  z.string()
+);
+
+// Optional but, if provided, must be a valid email.
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+const optionalEmail = z
+  .preprocess((v) => (typeof v === 'string' ? v.trim() : ''), z.string())
+  .refine((v) => v === '' || EMAIL_RE.test(v), 'Enter a valid email');
 
 export const memberSchema = z.object({
   full_name: z.string().trim().min(2, 'Full name is required'),
   phone: optionalString,
-  email: z.string().trim().email('Enter a valid email').optional().or(z.literal('')),
+  email: optionalEmail,
   joining_date: z.string().min(1, 'Joining date is required'),
   plan_id: z.string().uuid().optional().or(z.literal('')),
   monthly_fee: z.coerce.number().min(0, 'Fee cannot be negative'),
@@ -44,22 +57,24 @@ export type PaymentInput = z.infer<typeof paymentSchema>;
 
 export const admissionSchema = z.object({
   full_name: z.string().trim().min(2, 'Full name is required'),
-  phone: optionalString,
-  email: z.string().trim().email('Enter a valid email').optional().or(z.literal('')),
-  age: z
-    .preprocess(
-      (v) => (v === '' || v == null ? null : v),
-      z.coerce.number().int().min(0).max(120).nullable()
-    )
-    .optional(),
-  gender: optionalString,
-  address: optionalString,
-  emergency_contact: optionalString,
-  plan_id: z.string().uuid().optional().or(z.literal('')),
+  phone: z.string().trim().min(7, 'Contact number is required'),
+  email: optionalEmail, // optional
+  age: z.preprocess(
+    (v) => (v === '' || v == null ? NaN : v),
+    z.coerce
+      .number()
+      .int('Enter a valid age')
+      .min(1, 'Age is required')
+      .max(120, 'Enter a valid age')
+  ),
+  gender: z.string().trim().min(1, 'Select a gender'),
+  address: optionalString, // optional
+  emergency_contact: optionalString, // optional
+  plan_id: z.string().uuid('Select a membership duration'),
   offer_code: z.enum(['none', 'couple', 'wife', 'senior']).default('none'),
-  preferred_joining_date: optionalString,
-  notes: optionalString,
-  photo_reference: optionalString,
+  preferred_joining_date: z.string().trim().min(1, 'Select a joining date'),
+  notes: optionalString, // optional
+  photo_reference: optionalString, // optional, not on the public form
 });
 export type AdmissionInput = z.infer<typeof admissionSchema>;
 

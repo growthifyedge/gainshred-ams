@@ -25,7 +25,11 @@ export async function submitAdmission(
     notes: formData.get('notes'),
     photo_reference: formData.get('photo_reference'),
   });
-  if (!parsed.success) return { error: firstError(parsed.error) };
+  if (!parsed.success) {
+    // Real detail in server logs; friendly field message to the user.
+    console.error('[admission] validation failed:', parsed.error.flatten().fieldErrors);
+    return { error: firstError(parsed.error) };
+  }
 
   const input = parsed.data;
   const serviceIds = (formData.getAll('service_ids') as string[]).filter(Boolean);
@@ -47,6 +51,9 @@ export async function submitAdmission(
     photo_reference: input.photo_reference || null,
   });
 
-  if (error) return { error: error.message };
+  if (error) {
+    console.error('[admission] insert failed:', error);
+    return { error: 'Could not submit your request right now. Please try again.' };
+  }
   return { success: true };
 }

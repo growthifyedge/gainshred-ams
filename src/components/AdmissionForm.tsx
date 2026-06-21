@@ -49,20 +49,20 @@ export default function AdmissionForm({
           <input id="full_name" name="full_name" required className="input" />
         </div>
         <div>
-          <label className="label" htmlFor="phone">Contact number</label>
-          <input id="phone" name="phone" className="input" placeholder="03001234567" />
+          <label className="label" htmlFor="phone">Contact number *</label>
+          <input id="phone" name="phone" required className="input" placeholder="03001234567" />
         </div>
         <div>
           <label className="label" htmlFor="email">Email address</label>
           <input id="email" name="email" type="email" className="input" />
         </div>
         <div>
-          <label className="label" htmlFor="age">Age</label>
-          <input id="age" name="age" type="number" min={0} max={120} className="input" />
+          <label className="label" htmlFor="age">Age *</label>
+          <input id="age" name="age" type="number" min={1} max={120} required className="input" />
         </div>
         <div>
-          <label className="label" htmlFor="gender">Gender</label>
-          <select id="gender" name="gender" className="input">
+          <label className="label" htmlFor="gender">Gender *</label>
+          <select id="gender" name="gender" required className="input" defaultValue="">
             <option value="">— Select —</option>
             <option value="male">Male</option>
             <option value="female">Female</option>
@@ -78,13 +78,13 @@ export default function AdmissionForm({
           <input id="emergency_contact" name="emergency_contact" className="input" />
         </div>
         <div>
-          <label className="label" htmlFor="preferred_joining_date">Preferred joining date</label>
-          <input id="preferred_joining_date" name="preferred_joining_date" type="date" className="input" />
+          <label className="label" htmlFor="preferred_joining_date">Preferred joining date *</label>
+          <input id="preferred_joining_date" name="preferred_joining_date" type="date" required className="input" />
         </div>
 
         <div>
-          <label className="label" htmlFor="plan_id">Membership duration</label>
-          <select id="plan_id" name="plan_id" className="input">
+          <label className="label" htmlFor="plan_id">Membership duration *</label>
+          <select id="plan_id" name="plan_id" required className="input" defaultValue="">
             <option value="">— Select —</option>
             {plans.map((p) => (
               <option key={p.id} value={p.id}>
