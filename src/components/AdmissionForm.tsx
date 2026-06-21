@@ -6,6 +6,8 @@ import { OFFER_OPTIONS, computePackage, servicePayable, type OfferCode, type Pla
 import { formatMoney } from '@/lib/utils';
 import { submitAdmission, type AdmissionState } from '@/app/admission/actions';
 
+type AdmissionType = 'single' | 'couple';
+
 function Submit() {
   const { pending } = useFormStatus();
   return (
@@ -18,46 +20,45 @@ function Submit() {
 export default function AdmissionForm({ plans, services }: { plans: Plan[]; services: Service[] }) {
   const [state, formAction] = useFormState<AdmissionState, FormData>(submitAdmission, {});
 
-  const [offer, setOffer] = useState<OfferCode>('none');
+  const [type, setType] = useState<AdmissionType>('single'); // default Single
+  const [offer, setOffer] = useState<OfferCode>('none'); // single only
   const [age, setAge] = useState('');
-  // Primary / husband
   const [planId, setPlanId] = useState('');
   const [svc, setSvc] = useState<Set<string>>(new Set());
-  // Wife (couple only)
+  // wife (couple)
   const [wAge, setWAge] = useState('');
   const [wPlanId, setWPlanId] = useState('');
   const [wSvc, setWSvc] = useState<Set<string>>(new Set());
 
+  const isCouple = type === 'couple';
   const ageNum = age === '' ? null : Number(age);
-  const isSenior = offer === 'senior' || (ageNum != null && ageNum >= 67);
-  const isCouple = offer === 'wife';
-  const memberType = isCouple ? 'couple' : 'single';
-
+  // Senior applies only to SINGLE admissions (couple husband is always full price).
+  const isSenior = !isCouple && (offer === 'senior' || (ageNum != null && ageNum >= 67));
   const cardioServices = useMemo(() => services.filter((s) => s.category === 'cardio'), [services]);
 
-  // Pricing (uses the SAME computePackage engine as the software).
-  const single = useMemo(
+  // Pricing — reuses the software's computePackage. Husband/single uses null age
+  // in couple mode so 67+ husbands stay full price; single uses real age.
+  const primary = useMemo(
     () =>
       computePackage({
         plan: plans.find((p) => p.id === planId) ?? null,
         services: services.filter((s) => svc.has(s.id)),
-        offer: isSenior ? 'senior' : 'none',
-        age: ageNum,
+        offer: isCouple ? 'none' : offer,
+        age: isCouple ? null : ageNum,
       }),
-    [plans, services, planId, svc, isSenior, ageNum]
+    [plans, services, planId, svc, isCouple, offer, ageNum]
   );
-  const husband = single; // for couple, primary = husband at full price
   const wife = useMemo(
     () =>
       computePackage({
         plan: plans.find((p) => p.id === wPlanId) ?? null,
         services: services.filter((s) => wSvc.has(s.id)),
         offer: 'wife',
-        age: wAge === '' ? null : Number(wAge),
+        age: null,
       }),
-    [plans, services, wPlanId, wSvc, wAge]
+    [plans, services, wPlanId, wSvc]
   );
-  const coupleTotal = husband.gross + wife.gross;
+  const coupleTotal = primary.gross + wife.gross;
 
   function toggle(set: Set<string>, setSet: (s: Set<string>) => void, id: string) {
     const next = new Set(set);
@@ -78,7 +79,27 @@ export default function AdmissionForm({ plans, services }: { plans: Plan[]; serv
 
   return (
     <form action={formAction} className="card space-y-5 p-6">
-      <input type="hidden" name="member_type" value={memberType} />
+      <input type="hidden" name="member_type" value={type} />
+      {isCouple && <input type="hidden" name="offer_code" value="none" />}
+
+      {/* Admission Type selector (always visible) */}
+      <div>
+        <p className="label">Admission Type</p>
+        <div className="grid grid-cols-2 gap-3">
+          {(['single', 'couple'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setType(t)}
+              className={`rounded-lg border p-3 text-center text-sm font-semibold transition ${
+                type === t ? 'border-brand bg-brand/5 text-brand' : 'border-neutral-300 text-neutral-600 hover:bg-neutral-50'
+              }`}
+            >
+              {t === 'single' ? 'Single Admission' : 'Couple Admission (Husband + Wife)'}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Primary / Husband details */}
       <div>
@@ -123,22 +144,25 @@ export default function AdmissionForm({ plans, services }: { plans: Plan[]; serv
             <label className="label" htmlFor="preferred_joining_date">Preferred joining date *</label>
             <input id="preferred_joining_date" name="preferred_joining_date" type="date" required className="input" />
           </div>
-          <div>
-            <label className="label" htmlFor="offer_code">Offer</label>
-            <select id="offer_code" name="offer_code" value={offer} onChange={(e) => setOffer(e.target.value as OfferCode)} className="input">
-              {OFFER_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </div>
+          {/* Offer only applies to Single admissions */}
+          {!isCouple && (
+            <div>
+              <label className="label" htmlFor="offer_code">Offer</label>
+              <select id="offer_code" name="offer_code" value={offer} onChange={(e) => setOffer(e.target.value as OfferCode)} className="input">
+                {OFFER_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* ---- SENIOR: only Cardio ---- */}
-      {isSenior && (
+      {/* SINGLE + SENIOR: only Cardio */}
+      {!isCouple && isSenior && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-4">
           <p className="mb-1 text-sm font-semibold text-emerald-700">Senior Citizen 67+ Offer applied</p>
-          <p className="mb-3 text-xs text-neutral-500">Everything is FREE. Only Cardio is available (Rs. 2000 if selected).</p>
+          <p className="mb-3 text-xs text-neutral-500">Registration FREE · Package FREE. Only Cardio is available (Rs. 2000 if selected).</p>
           {cardioServices.map((s) => (
             <label key={s.id} className="flex items-center gap-2 text-sm">
               <input type="checkbox" name="service_ids" value={s.id} checked={svc.has(s.id)} onChange={() => toggle(svc, setSvc, s.id)} className="h-4 w-4" />
@@ -146,44 +170,19 @@ export default function AdmissionForm({ plans, services }: { plans: Plan[]; serv
               <span className="font-semibold text-neutral-700">{formatMoney(2000)}</span>
             </label>
           ))}
-          <Summary rows={[['Registration', 'FREE'], ['Package', 'FREE'], ['Cardio', formatMoney(single.servicesTotal)]]} total={single.gross} />
+          <Summary rows={[['Registration Fee', 'FREE'], ['Package Fee', 'FREE'], ['Cardio', formatMoney(primary.servicesTotal)]]} total={primary.gross} />
         </div>
       )}
 
-      {/* ---- SINGLE (no offer): plan + services ---- */}
-      {!isSenior && !isCouple && (
-        <PackageBlock
-          plans={plans}
-          services={services}
-          planId={planId}
-          setPlanId={setPlanId}
-          svc={svc}
-          onToggle={(id) => toggle(svc, setSvc, id)}
-          offer="none"
-          age={ageNum}
-          planName="plan_id"
-          svcName="service_ids"
-          pricing={single}
-        />
+      {/* SINGLE, not senior: plan + services (wife offer halves eligible services) */}
+      {!isCouple && !isSenior && (
+        <PackageBlock plans={plans} services={services} planId={planId} setPlanId={setPlanId} svc={svc} onToggle={(id) => toggle(svc, setSvc, id)} offer={offer} age={ageNum} planName="plan_id" svcName="service_ids" pricing={primary} />
       )}
 
-      {/* ---- WIFE 50% = COUPLE: husband + wife ---- */}
+      {/* COUPLE: husband + wife */}
       {isCouple && (
         <div className="space-y-5">
-          <PackageBlock
-            title="Husband Package & Services (full price)"
-            plans={plans}
-            services={services}
-            planId={planId}
-            setPlanId={setPlanId}
-            svc={svc}
-            onToggle={(id) => toggle(svc, setSvc, id)}
-            offer="none"
-            age={ageNum}
-            planName="plan_id"
-            svcName="service_ids"
-            pricing={husband}
-          />
+          <PackageBlock title="Husband Package & Services (full price)" plans={plans} services={services} planId={planId} setPlanId={setPlanId} svc={svc} onToggle={(id) => toggle(svc, setSvc, id)} offer="none" age={null} planName="plan_id" svcName="service_ids" pricing={primary} />
 
           <div>
             <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Wife Details</h3>
@@ -207,24 +206,10 @@ export default function AdmissionForm({ plans, services }: { plans: Plan[]; serv
             </div>
           </div>
 
-          <PackageBlock
-            title="Wife Package & Services (50% off eligible)"
-            badge="Wife 50% Offer"
-            plans={plans}
-            services={services}
-            planId={wPlanId}
-            setPlanId={setWPlanId}
-            svc={wSvc}
-            onToggle={(id) => toggle(wSvc, setWSvc, id)}
-            offer="wife"
-            age={wAge === '' ? null : Number(wAge)}
-            planName="w_plan_id"
-            svcName="w_service_ids"
-            pricing={wife}
-          />
+          <PackageBlock title="Wife Package & Services" badge="Wife 50% Offer" plans={plans} services={services} planId={wPlanId} setPlanId={setWPlanId} svc={wSvc} onToggle={(id) => toggle(wSvc, setWSvc, id)} offer="wife" age={null} planName="w_plan_id" svcName="w_service_ids" pricing={wife} />
 
           <div className="rounded-lg bg-brand-black p-4 text-sm text-white">
-            <div className="flex justify-between"><span>Husband total</span><span>{formatMoney(husband.gross)}</span></div>
+            <div className="flex justify-between"><span>Husband total</span><span>{formatMoney(primary.gross)}</span></div>
             <div className="flex justify-between"><span>Wife total (after 50%)</span><span>{formatMoney(wife.gross)}</span></div>
             <div className="mt-2 flex justify-between border-t border-neutral-700 pt-2 text-base font-bold">
               <span>Total receivable</span><span className="text-brand">{formatMoney(coupleTotal)}</span>
@@ -247,32 +232,11 @@ export default function AdmissionForm({ plans, services }: { plans: Plan[]; serv
 }
 
 function PackageBlock({
-  title,
-  badge,
-  plans,
-  services,
-  planId,
-  setPlanId,
-  svc,
-  onToggle,
-  offer,
-  age,
-  planName,
-  svcName,
-  pricing,
+  title, badge, plans, services, planId, setPlanId, svc, onToggle, offer, age, planName, svcName, pricing,
 }: {
-  title?: string;
-  badge?: string;
-  plans: Plan[];
-  services: Service[];
-  planId: string;
-  setPlanId: (v: string) => void;
-  svc: Set<string>;
-  onToggle: (id: string) => void;
-  offer: OfferCode;
-  age: number | null;
-  planName: string;
-  svcName: string;
+  title?: string; badge?: string; plans: Plan[]; services: Service[]; planId: string;
+  setPlanId: (v: string) => void; svc: Set<string>; onToggle: (id: string) => void;
+  offer: OfferCode; age: number | null; planName: string; svcName: string;
   pricing: ReturnType<typeof computePackage>;
 }) {
   return (
@@ -289,8 +253,7 @@ function PackageBlock({
           <option value="">— Select —</option>
           {plans.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name}
-              {p.total_price ? ` — ${formatMoney(p.total_price)}` : ''}
+              {p.name}{p.total_price ? ` — ${formatMoney(p.total_price)}` : ''}
             </option>
           ))}
         </select>

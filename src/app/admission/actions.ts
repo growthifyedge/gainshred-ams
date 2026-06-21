@@ -5,9 +5,9 @@ import { admissionSchema, firstError } from '@/lib/validations';
 
 export type AdmissionState = { error?: string; success?: boolean };
 
-// Public submission. Inserts directly into admission_requests (anon RLS allows
-// INSERT). Single/Senior requests do NOT reference the couple columns, so they
-// work even before the Phase 7 migration; couple requests use member_type/spouse.
+// Public submission. Single/Senior requests do NOT reference the couple columns,
+// so they work even before the Phase 7 migration; couple requests use
+// member_type + spouse. Couple is an ADMISSION TYPE, never an offer_code.
 export async function submitAdmission(
   _prev: AdmissionState,
   formData: FormData
@@ -32,22 +32,19 @@ export async function submitAdmission(
   }
 
   const input = parsed.data;
-  const offer = input.offer_code;
-  const memberType = String(formData.get('member_type') ?? 'single');
+  const memberType = String(formData.get('member_type') ?? 'single') === 'couple' ? 'couple' : 'single';
+  // Couple husband is always full price → offer_code 'none'.
+  const offer = memberType === 'couple' ? 'none' : input.offer_code;
+  const isSenior =
+    memberType === 'single' && (offer === 'senior' || (input.age != null && input.age >= 67));
+
   let planId: string | null = input.plan_id || null;
   let serviceIds = (formData.getAll('service_ids') as string[]).filter(Boolean);
 
-  // --- Senior: no package, Cardio only ---
-  if (offer === 'senior') {
-    planId = null; // package is free / not applicable for senior
-    // Only Cardio is offered to seniors; the form renders only Cardio, but
-    // re-check on the server using the catalog so nothing else slips through.
-  }
-
-  // --- Wife 50% = couple admission (husband primary + wife spouse) ---
+  const supabase = createClient();
   let spouse: Record<string, unknown> | null = null;
-  let mtype = 'single';
-  if (offer === 'wife' && memberType === 'couple') {
+
+  if (memberType === 'couple') {
     const wName = String(formData.get('w_full_name') ?? '').trim();
     const wAge = String(formData.get('w_age') ?? '').trim();
     const wPlan = String(formData.get('w_plan_id') ?? '').trim();
@@ -55,7 +52,6 @@ export async function submitAdmission(
     if (!wAge) return { error: 'Wife age is required.' };
     if (!planId) return { error: "Select the husband's membership duration." };
     if (!wPlan) return { error: "Select the wife's membership duration." };
-    mtype = 'couple';
     spouse = {
       full_name: wName,
       phone: String(formData.get('w_phone') ?? '').trim() || null,
@@ -65,12 +61,17 @@ export async function submitAdmission(
       service_ids: (formData.getAll('w_service_ids') as string[]).filter(Boolean),
       offer_code: 'wife',
     };
-  } else if (offer !== 'senior') {
-    // Normal single admission needs a package.
+  } else if (isSenior) {
+    // Senior: registration + package free, ONLY Cardio may be submitted.
+    planId = null;
+    if (serviceIds.length) {
+      const { data: cats } = await supabase.from('services').select('id, category').in('id', serviceIds);
+      serviceIds = (cats ?? []).filter((c: any) => c.category === 'cardio').map((c: any) => c.id);
+    }
+  } else {
     if (!planId) return { error: 'Select a membership duration.' };
   }
 
-  const supabase = createClient();
   const payload: Record<string, unknown> = {
     full_name: input.full_name,
     phone: input.phone || null,
@@ -87,7 +88,7 @@ export async function submitAdmission(
     photo_reference: input.photo_reference || null,
   };
   // Only attach couple columns when needed, so single/senior work pre-migration.
-  if (mtype === 'couple') {
+  if (memberType === 'couple') {
     payload.member_type = 'couple';
     payload.spouse = spouse;
   }
