@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getProfile } from '@/lib/auth';
@@ -93,6 +94,11 @@ export default async function EditMemberPage({ params }: { params: { id: string 
       <PageHeader
         title="Edit Member"
         subtitle={`${member.registration_number ?? ''} · ${member.full_name}`}
+        action={
+          <Link href={`/members/${params.id}/card`} className="btn-ghost">
+            Membership Card
+          </Link>
+        }
       />
 
       {husbandCard && wifeCard && (

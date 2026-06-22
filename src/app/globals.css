@@ -70,3 +70,21 @@ body {
     margin: 14mm;
   }
 }
+
+/* Membership card: print ONLY the card (hide app shell, sidebar, buttons).
+   Scoped with :has() so it never affects other printable pages (receipts). */
+@media print {
+  body:has(.membership-card-print) * {
+    visibility: hidden !important;
+  }
+  body:has(.membership-card-print) .membership-card-print,
+  body:has(.membership-card-print) .membership-card-print * {
+    visibility: visible !important;
+  }
+  body:has(.membership-card-print) .membership-card-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}
