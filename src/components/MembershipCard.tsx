@@ -6,12 +6,12 @@ import { formatDate } from '@/lib/utils';
 // (REG. No: / NAME: / PACKAGE: / D.O.J:) on your card design.
 // ===========================================================================
 const POS = {
-  reg: { top: 33, left: 60 },
-  name: { top: 46, left: 60 },
-  pkg: { top: 59, left: 60 },
-  doj: { top: 72, left: 60 },
+  reg: { top: 33.2, left: 60.8 },
+  name: { top: 46.4, left: 60.8 },
+  pkg: { top: 59.7, left: 63.2 }, // extra right spacing so it clears the "PACKAGE:" label
+  doj: { top: 79.0, left: 60.8 }, // moved down onto the D.O.J line
 };
-const VALUE_FONT = '2.5cqw'; // scales with card width
+const VALUE_FONT = '2.15cqw'; // scales with card width
 const VALUE_MAX_WIDTH = '36%'; // keeps long names contained
 
 export default function MembershipCard({
@@ -54,6 +54,7 @@ function Value({ pos, text }: { pos: { top: number; left: number }; text: string
         left: `${pos.left}%`,
         fontSize: VALUE_FONT,
         maxWidth: VALUE_MAX_WIDTH,
+        textAlign: 'left',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
