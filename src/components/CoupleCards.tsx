@@ -31,13 +31,18 @@ function Card({ title, d, current }: { title: string; d: CoupleCardData; current
           <h4 className="font-semibold">{title}</h4>
           <p className="font-mono text-xs text-neutral-400">{d.registration_number ?? '—'}</p>
         </div>
-        {current ? (
-          <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand">Editing</span>
-        ) : (
-          <Link href={`/members/${d.id}/edit`} className="btn-ghost btn-sm">
-            Edit {title}
+        <div className="flex items-center gap-2">
+          <Link href={`/members/${d.id}/card`} className="btn-ghost btn-sm">
+            {title} Card
           </Link>
-        )}
+          {current ? (
+            <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand">Editing</span>
+          ) : (
+            <Link href={`/members/${d.id}/edit`} className="btn-ghost btn-sm">
+              Edit {title}
+            </Link>
+          )}
+        </div>
       </div>
       <p className="text-sm text-neutral-600">
         {d.full_name}
