@@ -25,6 +25,7 @@ async function createMemberFrom(
     notes?: string | null;
     couple_group_id?: string | null;
     service_ids: string[];
+    includeRegistration?: boolean;
   }
 ) {
   const snap = await memberBillSnapshot(supabase, {
@@ -32,6 +33,7 @@ async function createMemberFrom(
     serviceIds: data.service_ids,
     offer: data.offer_code,
     age: data.age ?? null,
+    includeRegistration: data.includeRegistration,
   });
   const { data: member, error } = await supabase
     .from('members')
@@ -142,6 +144,7 @@ export async function convertAdmission(
         notes: null,
         couple_group_id: groupId,
         service_ids: Array.isArray(sp.service_ids) ? sp.service_ids : [],
+        includeRegistration: false, // wife pays no registration in a couple
       });
     } catch (e: any) {
       return { error: e?.message ?? 'Could not convert the couple.' };

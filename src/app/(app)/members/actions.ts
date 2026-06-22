@@ -102,11 +102,22 @@ export async function updateMember(
 
   const supabase = createClient();
   await syncServices(supabase, id, serviceIds);
+
+  // Preserve the couple rule: a couple wife (in a couple group, offer = wife)
+  // pays no registration when re-saved.
+  const { data: existing } = await supabase
+    .from('members')
+    .select('couple_group_id')
+    .eq('id', id)
+    .single();
+  const coupleWife = !!existing?.couple_group_id && parsed.data.offer_code === 'wife';
+
   const snap = await memberBillSnapshot(supabase, {
     planId: parsed.data.plan_id || null,
     serviceIds,
     offer: parsed.data.offer_code,
     age: parsed.data.age ?? null,
+    includeRegistration: coupleWife ? false : undefined,
   });
   const { error } = await supabase
     .from('members')
@@ -141,8 +152,16 @@ export async function createCouple(_prev: FormState, formData: FormData): Promis
     const age = ageRaw === '' ? null : Number(ageRaw);
     const svcIds = (formData.getAll(`${prefix}_service_ids`) as string[]).filter(Boolean);
     const offer = age != null && age >= 67 ? 'senior' : offerCode;
+    // Wife pays no registration in a couple (husband pays it once).
+    const includeRegistration = prefix !== 'w';
 
-    const snap = await memberBillSnapshot(supabase, { planId, serviceIds: svcIds, offer, age });
+    const snap = await memberBillSnapshot(supabase, {
+      planId,
+      serviceIds: svcIds,
+      offer,
+      age,
+      includeRegistration,
+    });
 
     const { data: member, error } = await supabase
       .from('members')

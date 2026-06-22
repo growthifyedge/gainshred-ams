@@ -91,14 +91,17 @@ export function computePackage(opts: {
   services: Service[];
   offer: OfferCode;
   age?: number | null;
+  // Couple wife pays no registration (the husband pays it once for the couple).
+  includeRegistration?: boolean;
 }): PricingResult {
   const { plan, services, offer, age } = opts;
   const eff = effectiveOffer(offer, age);
+  const includeRegistration = opts.includeRegistration !== false;
 
   // Only OPTIONAL services count here; package components are excluded.
   const optional = services.filter((s) => !PACKAGE_CATEGORIES.includes(s.category));
 
-  const fullRegistration = Number(plan?.registration_fee ?? 0);
+  const fullRegistration = includeRegistration ? Number(plan?.registration_fee ?? 0) : 0;
   const fullPackage = Number(plan?.total_price ?? 0);
   const servicesFull = optional.reduce((s, sv) => s + Number(sv.price || 0), 0);
 

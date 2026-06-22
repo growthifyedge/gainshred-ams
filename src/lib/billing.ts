@@ -5,7 +5,13 @@ import { computePackage, type OfferCode } from '@/lib/packages';
 // Returns the columns to write onto the member row.
 export async function memberBillSnapshot(
   supabase: any,
-  opts: { planId?: string | null; serviceIds: string[]; offer?: string | null; age?: number | null }
+  opts: {
+    planId?: string | null;
+    serviceIds: string[];
+    offer?: string | null;
+    age?: number | null;
+    includeRegistration?: boolean; // couple wife = false (no registration)
+  }
 ) {
   let plan: any = null;
   if (opts.planId) {
@@ -31,6 +37,7 @@ export async function memberBillSnapshot(
     services,
     offer: (opts.offer as OfferCode) ?? 'none',
     age: opts.age ?? null,
+    includeRegistration: opts.includeRegistration,
   });
 
   return {
