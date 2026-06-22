@@ -6,10 +6,10 @@ import { formatDate } from '@/lib/utils';
 // (REG. No: / NAME: / PACKAGE: / D.O.J:) on your card design.
 // ===========================================================================
 const POS = {
-  reg: { top: 32.3, left: 62.2 },
-  name: { top: 45.5, left: 62.2 },
-  pkg: { top: 58.3, left: 64.0 }, // extra right spacing so it clears the "PACKAGE:" label
-  doj: { top: 76.8, left: 62.2 }, // sits just above the D.O.J line
+  reg: { top: 28.3, left: 61.2 },
+  name: { top: 44.5, left: 61.2 },
+  pkg: { top: 60.8, left: 62.0 }, // extra right spacing so it clears the "PACKAGE:" label
+  doj: { top: 77.8, left: 61.2 },
 };
 const VALUE_FONT = '2.05cqw'; // scales with card width
 const VALUE_MAX_WIDTH = '36%'; // keeps long names contained
