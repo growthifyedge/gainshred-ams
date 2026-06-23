@@ -33,6 +33,8 @@ export default async function ReceiptPage({ params }: { params: { id: string } }
 
   const gymName = settings?.gym_name ?? 'GainShred';
   const planName = (memberCtx as any)?.plan?.name as string | undefined;
+  // 1-month plan → show the package row as "Monthly Fee" (label only).
+  const isMonthlyPlan = ((memberCtx as any)?.plan?.duration_months as number | undefined) === 1;
   const offerCode = (memberCtx as any)?.offer_code as string | undefined;
   const planSaving = (memberCtx as any)?.plan?.saving_amount as number | undefined;
   const svcNames = (memberSvcs ?? []).map((x: any) => x.service?.name).filter(Boolean);
@@ -133,14 +135,16 @@ export default async function ReceiptPage({ params }: { params: { id: string } }
           <table className="mt-6 w-full text-sm">
             <tbody className="divide-y divide-neutral-200">
               <tr>
-                <td className="py-2 text-neutral-600">Registration Fee</td>
-                <td className="py-2 text-right font-medium">{formatMoney(r.registration_fee)}</td>
-              </tr>
-              <tr>
                 <td className="py-2 text-neutral-600">
-                  Package Fee{r.package_name ? ` (${r.package_name})` : ''}
+                  {isMonthlyPlan
+                    ? 'Monthly Fee'
+                    : `Package Fee${r.package_name ? ` (${r.package_name})` : ''}`}
                 </td>
                 <td className="py-2 text-right font-medium">{formatMoney(r.package_fee)}</td>
+              </tr>
+              <tr>
+                <td className="py-2 text-neutral-600">Registration Fee</td>
+                <td className="py-2 text-right font-medium">{formatMoney(r.registration_fee)}</td>
               </tr>
               {Number(r.services_total) > 0 && (
                 <tr>

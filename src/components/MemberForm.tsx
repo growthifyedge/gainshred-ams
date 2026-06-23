@@ -82,6 +82,11 @@ export default function MemberForm({
     return g;
   }, [services]);
 
+  // For the 1-month (Monthly) plan, show the package row as "Monthly Fee" so the
+  // breakdown reads Monthly Fee + Registration Fee = Total. Label only; no math change.
+  const isMonthlyPlan = (plans.find((p) => p.id === planId)?.duration_months ?? null) === 1;
+  const packageFeeLabel = isMonthlyPlan ? 'Monthly Fee' : 'Package Fee';
+
   function toggleService(id: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -200,8 +205,8 @@ export default function MemberForm({
           {pricing.offerLabel && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">{pricing.offerLabel}</span>}
         </div>
         <dl className="space-y-1">
+          <Row label={packageFeeLabel} value={eff === 'senior' ? 'FREE' : formatMoney(pricing.packageFee)} />
           <Row label="Registration Fee" value={eff === 'senior' ? 'FREE' : formatMoney(pricing.registrationFee)} />
-          <Row label="Package Fee" value={eff === 'senior' ? 'FREE' : formatMoney(pricing.packageFee)} />
           <Row label="Services Total" value={formatMoney(pricing.servicesTotal)} />
           <Row label="Gross Payable" value={formatMoney(pricing.gross)} bold />
           <Row label="Net Payable" value={formatMoney(pricing.gross)} brand />
