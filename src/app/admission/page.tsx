@@ -12,7 +12,7 @@ export default async function AdmissionPage() {
   const [{ data: plans }, { data: services }] = await Promise.all([
     supabase
       .from('membership_plans')
-      .select('id, name, total_price, monthly_fee')
+      .select('id, name, total_price, monthly_fee, registration_fee, duration_months')
       .eq('is_active', true)
       .order('monthly_fee'),
     supabase

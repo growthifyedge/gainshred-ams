@@ -277,8 +277,11 @@ function PackageBlock({
       </div>
       <Summary
         rows={[
+          [
+            (plans.find((p) => p.id === planId)?.duration_months ?? null) === 1 ? 'Monthly Fee' : 'Package Fee',
+            formatMoney(pricing.packageFee),
+          ],
           ['Registration Fee', formatMoney(pricing.registrationFee)],
-          ['Package Fee', formatMoney(pricing.packageFee)],
           ['Services Total', formatMoney(pricing.servicesTotal)],
         ]}
         total={pricing.gross}

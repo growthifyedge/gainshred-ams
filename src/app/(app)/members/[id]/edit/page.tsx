@@ -18,7 +18,7 @@ export default async function EditMemberPage({ params }: { params: { id: string 
     supabase.from('members').select('*').eq('id', params.id).single(),
     supabase
       .from('membership_plans')
-      .select('id, name, monthly_fee, duration_months, advance_amount, total_price, saving_amount')
+      .select('id, name, monthly_fee, duration_months, advance_amount, total_price, saving_amount, registration_fee')
       .order('monthly_fee'),
     supabase
       .from('services')
