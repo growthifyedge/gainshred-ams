@@ -6,7 +6,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getProfile } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
-import { getKarachiDate } from '@/lib/utils';
+import { getKarachiDate, computeNextDueDate } from '@/lib/utils';
 import { memberBillSnapshot } from '@/lib/billing';
 
 export type AdmissionState = { error?: string };
@@ -35,6 +35,16 @@ async function createMemberFrom(
     age: data.age ?? null,
     includeRegistration: data.includeRegistration,
   });
+  // Phase 8: first renewal date = joining_date + plan duration (null if no plan).
+  let nextDue: string | null = null;
+  if (data.plan_id) {
+    const { data: pl } = await supabase
+      .from('membership_plans')
+      .select('duration_months')
+      .eq('id', data.plan_id)
+      .single();
+    nextDue = computeNextDueDate(data.joining_date, pl?.duration_months ?? null);
+  }
   const { data: member, error } = await supabase
     .from('members')
     .insert({
@@ -50,6 +60,7 @@ async function createMemberFrom(
       notes: data.notes ?? null,
       couple_group_id: data.couple_group_id ?? null,
       ...snap,
+      next_due_date: nextDue,
     })
     .select('id, registration_number')
     .single();

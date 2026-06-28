@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getProfile } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
 import { memberSchema, firstError } from '@/lib/validations';
-import { getKarachiDate } from '@/lib/utils';
+import { getKarachiDate, computeNextDueDate } from '@/lib/utils';
 import { memberBillSnapshot } from '@/lib/billing';
 
 export type FormState = { error?: string };
@@ -73,9 +73,19 @@ export async function createMember(_prev: FormState, formData: FormData): Promis
     offer: parsed.data.offer_code,
     age: parsed.data.age ?? null,
   });
+  // Phase 8: first renewal date = joining_date + plan duration (null if no plan).
+  let nextDue: string | null = null;
+  if (parsed.data.plan_id) {
+    const { data: pl } = await supabase
+      .from('membership_plans')
+      .select('duration_months')
+      .eq('id', parsed.data.plan_id)
+      .single();
+    nextDue = computeNextDueDate(parsed.data.joining_date, pl?.duration_months ?? null);
+  }
   const { data, error } = await supabase
     .from('members')
-    .insert({ ...toRow(parsed.data), ...snap })
+    .insert({ ...toRow(parsed.data), ...snap, next_due_date: nextDue })
     .select('id')
     .single();
 
@@ -162,6 +172,16 @@ export async function createCouple(_prev: FormState, formData: FormData): Promis
       age,
       includeRegistration,
     });
+    // Phase 8: first renewal date = joining_date + plan duration (null if no plan).
+    let nextDue: string | null = null;
+    if (planId) {
+      const { data: pl } = await supabase
+        .from('membership_plans')
+        .select('duration_months')
+        .eq('id', planId)
+        .single();
+      nextDue = computeNextDueDate(joining, pl?.duration_months ?? null);
+    }
 
     const { data: member, error } = await supabase
       .from('members')
@@ -177,6 +197,7 @@ export async function createCouple(_prev: FormState, formData: FormData): Promis
         status: 'active',
         couple_group_id: groupId,
         ...snap,
+        next_due_date: nextDue,
       })
       .select('id, registration_number')
       .single();
