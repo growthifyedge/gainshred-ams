@@ -1,9 +1,17 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { PageHeader, StatusBadge, EmptyRow } from '@/components/ui';
-import { formatMoney, formatDate } from '@/lib/utils';
+import { formatMoney, formatDate, getKarachiDate } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
+
+// Whole days from next_due_date up to today (both YYYY-MM-DD). Display-only.
+function daysOverdue(nextDue: string, today: string): number {
+  const a = Date.parse(`${nextDue}T00:00:00Z`);
+  const b = Date.parse(`${today}T00:00:00Z`);
+  if (isNaN(a) || isNaN(b)) return 0;
+  return Math.max(0, Math.round((b - a) / 86400000));
+}
 
 export default async function DuesPage({
   searchParams,
@@ -31,12 +39,74 @@ export default async function DuesPage({
       : true
   );
 
+  // Phase E (read-only): active members due for renewal by members.next_due_date.
+  // status inactive excluded; null next_due_date excluded; next_due_date <= today.
+  const today = getKarachiDate();
+  const { data: renewalData } = await supabase
+    .from('members')
+    .select('id, registration_number, full_name, monthly_fee, next_due_date, plan:membership_plans(name)')
+    .eq('status', 'active')
+    .not('next_due_date', 'is', null)
+    .lte('next_due_date', today)
+    .order('next_due_date', { ascending: true });
+  const renewalRows = renewalData ?? [];
+
   return (
     <div>
       <PageHeader
         title="Dues / Receivables"
         subtitle="Gross payable − discount = net payable; net − received = receivable."
       />
+
+      {/* Phase E: renewal-due members (read-only, from members.next_due_date) */}
+      <div className="mb-6 card overflow-hidden">
+        <div className="border-b border-neutral-200 px-4 py-3">
+          <h2 className="text-sm font-semibold text-neutral-700">Renewal Due</h2>
+          <p className="text-xs text-neutral-400">
+            Active members whose next due date is today or earlier.
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-neutral-200">
+            <thead className="bg-neutral-50">
+              <tr>
+                <th className="th">Reg # / Member</th>
+                <th className="th">Plan</th>
+                <th className="th">Fee</th>
+                <th className="th">Next Due Date</th>
+                <th className="th">Days overdue</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-100">
+              {renewalRows.length > 0 ? (
+                renewalRows.map((r: any) => {
+                  const overdue = daysOverdue(r.next_due_date, today);
+                  return (
+                    <tr key={r.id}>
+                      <td className="td">
+                        <div className="font-medium">{r.full_name}</div>
+                        <div className="font-mono text-xs text-neutral-400">
+                          {r.registration_number ?? '—'}
+                        </div>
+                      </td>
+                      <td className="td">{r.plan?.name ?? '—'}</td>
+                      <td className="td">{formatMoney(r.monthly_fee)}</td>
+                      <td className="td">{formatDate(r.next_due_date)}</td>
+                      <td className="td">
+                        <span className="badge bg-red-100 text-brand">
+                          {overdue === 0 ? 'Due today' : `${overdue} day${overdue === 1 ? '' : 's'}`}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <EmptyRow colSpan={5} text="No members are due for renewal right now." />
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <form className="mb-4 flex flex-wrap gap-3" method="get">
         <input name="q" defaultValue={searchParams.q ?? ''} placeholder="Search name or GS-0001…" className="input max-w-xs" />
