@@ -3,10 +3,27 @@ import { createClient } from '@/lib/supabase/server';
 import { getProfile } from '@/lib/auth';
 import { PageHeader, StatusBadge, EmptyRow } from '@/components/ui';
 import ConfirmSubmit from '@/components/ConfirmSubmit';
-import { formatMoney, formatDate } from '@/lib/utils';
+import { formatMoney, formatDate, getKarachiDate } from '@/lib/utils';
 import { setMemberStatus, deleteMemberPermanently } from './actions';
 
 export const dynamic = 'force-dynamic';
+
+// Display-only renewal status (Phase D). Does not change next_due_date.
+const RENEWAL_BADGE: Record<'Active' | 'Due' | 'Inactive', string> = {
+  Active: 'bg-emerald-100 text-emerald-700',
+  Due: 'bg-red-100 text-brand',
+  Inactive: 'bg-neutral-200 text-neutral-600',
+};
+
+function renewalStatus(
+  status: string,
+  nextDue: string | null,
+  today: string
+): 'Active' | 'Due' | 'Inactive' {
+  if (status === 'inactive') return 'Inactive';
+  if (!nextDue || today >= nextDue) return 'Due';
+  return 'Active';
+}
 
 export default async function MembersPage({
   searchParams,
@@ -19,7 +36,7 @@ export default async function MembersPage({
 
   let query = supabase
     .from('members')
-    .select('id, registration_number, full_name, phone, email, monthly_fee, due_day, status, plan:membership_plans(name)')
+    .select('id, registration_number, full_name, phone, email, monthly_fee, due_day, status, next_due_date, plan:membership_plans(name)')
     .order('full_name', { ascending: true });
 
   const q = searchParams.q?.trim();
@@ -36,6 +53,23 @@ export default async function MembersPage({
   if (status && status !== 'all') query = query.eq('status', status);
 
   const { data: members } = await query;
+
+  // Display-only: latest completed payment date per listed member (read-only;
+  // does not touch payment insert/void logic).
+  const memberIds = (members ?? []).map((m: any) => m.id);
+  const lastPaymentByMember: Record<string, string> = {};
+  if (memberIds.length) {
+    const { data: pays } = await supabase
+      .from('payments')
+      .select('member_id, payment_date')
+      .eq('status', 'completed')
+      .in('member_id', memberIds)
+      .order('payment_date', { ascending: false });
+    for (const p of (pays ?? []) as any[]) {
+      if (!lastPaymentByMember[p.member_id]) lastPaymentByMember[p.member_id] = p.payment_date;
+    }
+  }
+  const today = getKarachiDate();
 
   return (
     <div>
@@ -85,6 +119,9 @@ export default async function MembersPage({
                 <th className="th">Fee</th>
                 <th className="th">Due day</th>
                 <th className="th">Status</th>
+                <th className="th">Next Due Date</th>
+                <th className="th">Renewal</th>
+                <th className="th">Last Payment</th>
                 {isAdmin && <th className="th text-right">Actions</th>}
               </tr>
             </thead>
@@ -108,6 +145,14 @@ export default async function MembersPage({
                     <td className="td">
                       <StatusBadge status={m.status} />
                     </td>
+                    <td className="td">{formatDate(m.next_due_date)}</td>
+                    <td className="td">
+                      {(() => {
+                        const rs = renewalStatus(m.status, m.next_due_date ?? null, today);
+                        return <span className={`badge ${RENEWAL_BADGE[rs]}`}>{rs}</span>;
+                      })()}
+                    </td>
+                    <td className="td">{formatDate(lastPaymentByMember[m.id] ?? null)}</td>
                     {isAdmin && (
                       <td className="td">
                         <div className="flex items-center justify-end gap-2">
@@ -137,7 +182,7 @@ export default async function MembersPage({
                   </tr>
                 ))
               ) : (
-                <EmptyRow colSpan={isAdmin ? 7 : 6} text="No members found." />
+                <EmptyRow colSpan={isAdmin ? 10 : 9} text="No members found." />
               )}
             </tbody>
           </table>
