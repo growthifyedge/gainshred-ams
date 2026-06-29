@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getProfile } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
 import { paymentSchema, firstError } from '@/lib/validations';
-import { firstOfMonth } from '@/lib/utils';
+import { firstOfMonth, computeNextDueDate } from '@/lib/utils';
 
 export type FormState = { error?: string };
 
@@ -120,6 +120,29 @@ export async function createPayment(_prev: FormState, formData: FormData): Promi
     advance_added: input.advance_added,
     advance_applied: input.advance_applied,
   });
+
+  // Phase 8: after a successful fee payment, advance the member's renewal date
+  // by their plan duration — from the current next_due_date, or from joining_date
+  // if it isn't set yet. No plan/duration => leave next_due_date unchanged.
+  if (input.amount > 0) {
+    const { data: m } = await supabase
+      .from('members')
+      .select('plan_id, next_due_date, joining_date')
+      .eq('id', input.member_id)
+      .single();
+    if (m?.plan_id) {
+      const { data: pl } = await supabase
+        .from('membership_plans')
+        .select('duration_months')
+        .eq('id', m.plan_id)
+        .single();
+      const base = m.next_due_date ?? m.joining_date;
+      const newNextDue = computeNextDueDate(base, pl?.duration_months ?? null);
+      if (newNextDue) {
+        await supabase.from('members').update({ next_due_date: newNextDue }).eq('id', input.member_id);
+      }
+    }
+  }
 
   revalidatePath('/payments');
   revalidatePath('/dues');
