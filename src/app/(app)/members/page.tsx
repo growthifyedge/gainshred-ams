@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 export default async function MembersPage({
   searchParams,
 }: {
-  searchParams: { q?: string; status?: string };
+  searchParams: { q?: string; status?: string; deleted?: string };
 }) {
   const profile = await getProfile();
   const isAdmin = profile?.role === 'admin';
@@ -50,6 +50,12 @@ export default async function MembersPage({
           ) : null
         }
       />
+
+      {searchParams.deleted?.trim() && (
+        <div className="mb-4 rounded-lg bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          Member “{searchParams.deleted.trim()}” was permanently deleted.
+        </div>
+      )}
 
       {/* Filters */}
       <form className="mb-4 flex flex-wrap gap-3" method="get">

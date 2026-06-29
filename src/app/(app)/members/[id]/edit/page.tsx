@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getProfile } from '@/lib/auth';
 import { PageHeader } from '@/components/ui';
 import MemberForm from '@/components/MemberForm';
+import MemberDangerZone from '@/components/MemberDangerZone';
 import CoupleCards, { type CoupleCardData } from '@/components/CoupleCards';
 import { updateMember } from '../../actions';
 
@@ -116,6 +117,12 @@ export default async function EditMemberPage({ params }: { params: { id: string 
         services={services ?? []}
         initial={{ ...member, service_ids: serviceIds }}
         submitLabel="Save Changes"
+      />
+
+      <MemberDangerZone
+        memberId={params.id}
+        memberName={member.full_name}
+        isCouple={!!member.couple_group_id}
       />
     </div>
   );

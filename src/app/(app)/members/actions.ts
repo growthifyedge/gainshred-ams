@@ -242,6 +242,49 @@ export async function setMemberStatus(id: string, status: 'active' | 'inactive' 
   revalidatePath('/members');
 }
 
+// Danger Zone (member edit page): permanent delete with a typed "DELETE"
+// confirmation, then redirect to the list with a success message.
+// Deletes ONLY this member (never the couple spouse). payments.member_id is ON
+// DELETE RESTRICT so payments are removed first; every other child FK is ON
+// DELETE CASCADE / SET NULL, so the member delete cleans them up automatically.
+export async function dangerDeleteMember(
+  id: string,
+  _prev: FormState,
+  formData: FormData
+): Promise<FormState> {
+  const profile = await getProfile();
+  if (profile?.role !== 'admin') return { error: 'Only admins can delete members.' };
+
+  if (String(formData.get('confirm') ?? '').trim() !== 'DELETE') {
+    return { error: 'Type DELETE (in capitals) to confirm permanent deletion.' };
+  }
+
+  const supabase = createClient();
+  const { data: member } = await supabase
+    .from('members')
+    .select('full_name')
+    .eq('id', id)
+    .single();
+
+  // 1) Remove payments (RESTRICT blocker). 2) Remove the member (cascades the rest).
+  const { error: payErr } = await supabase.from('payments').delete().eq('member_id', id);
+  if (payErr) return { error: payErr.message };
+
+  const { error: delErr } = await supabase.from('members').delete().eq('id', id);
+  if (delErr) return { error: delErr.message };
+
+  await logAudit('delete_permanent', 'member', id, {
+    full_name: member?.full_name ?? null,
+    via: 'danger_zone',
+  });
+
+  revalidatePath('/members');
+  revalidatePath('/dues');
+  revalidatePath('/payments');
+  revalidatePath('/dashboard');
+  redirect(`/members?deleted=${encodeURIComponent(member?.full_name ?? 'Member')}`);
+}
+
 // PERMANENT hard delete — removes the member and ALL related records.
 // This is intentional and irreversible (no deactivation, no archive).
 export async function deleteMemberPermanently(id: string) {
