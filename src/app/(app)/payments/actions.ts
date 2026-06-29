@@ -121,9 +121,13 @@ export async function createPayment(_prev: FormState, formData: FormData): Promi
     advance_applied: input.advance_applied,
   });
 
-  // Phase 8: after a successful fee payment, advance the member's renewal date
-  // by their plan duration — from the current next_due_date, or from joining_date
-  // if it isn't set yet. No plan/duration => leave next_due_date unchanged.
+  // Phase 8: after a successful fee payment, set the member's renewal date from
+  // the JOINING CYCLE — never from today's entry date.
+  //   * First fee payment  -> joining_date + duration (covers the first period).
+  //   * Later fee payments  -> advance from the current next_due_date.
+  // This keeps backdated/late entries anchored to the join date (e.g. join 16 Jun,
+  // paid 30 Jun, Monthly => 16 Jul, not 16 Aug and not 30 Jul).
+  // No plan/duration => leave next_due_date unchanged.
   if (input.amount > 0) {
     const { data: m } = await supabase
       .from('members')
@@ -136,7 +140,15 @@ export async function createPayment(_prev: FormState, formData: FormData): Promi
         .select('duration_months')
         .eq('id', m.plan_id)
         .single();
-      const base = m.next_due_date ?? m.joining_date;
+      // Completed fee payments so far (includes the row just inserted above).
+      const { count } = await supabase
+        .from('payments')
+        .select('id', { count: 'exact', head: true })
+        .eq('member_id', input.member_id)
+        .eq('status', 'completed')
+        .gt('amount', 0);
+      const isFirstPayment = (count ?? 0) <= 1;
+      const base = isFirstPayment ? m.joining_date : (m.next_due_date ?? m.joining_date);
       const newNextDue = computeNextDueDate(base, pl?.duration_months ?? null);
       if (newNextDue) {
         await supabase.from('members').update({ next_due_date: newNextDue }).eq('id', input.member_id);
